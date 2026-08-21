@@ -3,15 +3,41 @@ services:
     build:
       context: ..
       dockerfile: stack/Dockerfile
-    image: link-hoarder:local
+    image: link-hoarder-api:local
     environment:
-      LINK_HOARDER_API_KEY: ${LINK_HOARDER_API_KEY:?Set LINK_HOARDER_API_KEY}
+      LINK_HOARDER_API_KEY: ${LINK_HOARDER_API_KEY:-}
       LINK_HOARDER_LOG_LEVEL: ${LINK_HOARDER_LOG_LEVEL:-INFO}
-    ports:
-      - "127.0.0.1:${LINK_HOARDER_PORT:-8000}:8000"
     volumes:
       - link-hoarder-data:/data
+      - link-hoarder-secrets:/run/link-hoarder
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          python -c "import urllib.request;
+          key=open('/run/link-hoarder/api-key').read();
+          request=urllib.request.Request('http://127.0.0.1:8000/health',headers={'X-API-Key':key});
+          urllib.request.urlopen(request,timeout=2).read()"
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: frontend/Dockerfile
+    image: link-hoarder-frontend:local
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${LINK_HOARDER_PORT:-8080}:80"
+    volumes:
+      - link-hoarder-secrets:/run/link-hoarder:ro
     restart: unless-stopped
 
 volumes:
   link-hoarder-data:
+  link-hoarder-secrets:

@@ -11,12 +11,13 @@ The first release provides these features:
 - Create, read, update, and delete bookmarks.
 - Import native Chromium and Firefox browser profiles.
 - Run a FastAPI server with API-key authentication.
+- Provide a static Vue web interface.
 - Store application data in platform-native directories.
 - Run the server with Docker Compose.
 - Publish Python packages, container images, and GitHub releases.
 
 The first release does not import exported bookmark files.
-It does not provide browser synchronization or a web interface.
+It does not provide browser synchronization.
 
 ## Architecture
 

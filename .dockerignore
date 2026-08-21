@@ -7,4 +7,6 @@
 .ruff_cache
 dist
 htmlcov
+frontend/dist
+frontend/node_modules
 stack/.env

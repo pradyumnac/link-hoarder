@@ -40,9 +40,10 @@ Send the key in the `X-API-Key` header. Open `http://127.0.0.1:8000/docs` for th
 
 ```console
 cp stack/.env.example stack/.env
-docker compose --env-file stack/.env -f stack/compose.yaml up --build -d
+mise run stack-up
 ```
 
+Open `http://127.0.0.1:8080`. The stack generates and provisions its API key.
 See the [Docker guide](docs/readthedocs/how-to/run-with-docker.md) for PowerShell commands.
 
 ## Documentation

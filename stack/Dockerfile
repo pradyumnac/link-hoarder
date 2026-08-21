@@ -10,10 +10,13 @@ WORKDIR /app
 
 COPY pyproject.toml uv.lock README.md ./
 COPY src ./src
-RUN uv sync --locked --no-dev
+COPY stack/api-entrypoint.sh /usr/local/bin/link-hoarder-api-entrypoint
+RUN uv sync --locked --no-dev \
+    && chmod +x /usr/local/bin/link-hoarder-api-entrypoint
 
 RUN mkdir -p /data
 VOLUME ["/data"]
 EXPOSE 8000
 
+ENTRYPOINT ["/usr/local/bin/link-hoarder-api-entrypoint"]
 CMD ["uv", "run", "--no-sync", "link-hoarder", "api", "--host", "0.0.0.0"]

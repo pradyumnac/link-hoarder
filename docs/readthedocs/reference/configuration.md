@@ -10,4 +10,6 @@ Link Hoarder reads environment variables with the `LINK_HOARDER_` prefix.
 | `LINK_HOARDER_HOST` | string | `127.0.0.1` | Set the API bind host. |
 | `LINK_HOARDER_PORT` | integer | `8000` | Set the API bind port. |
 
-The API does not start without `LINK_HOARDER_API_KEY`.
+The direct API process does not start without `LINK_HOARDER_API_KEY`.
+The Docker stack generates and stores this key when the variable is not set.
+In Docker Compose, `LINK_HOARDER_PORT` selects the frontend host port.

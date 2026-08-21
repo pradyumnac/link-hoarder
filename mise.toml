@@ -3,13 +3,14 @@
 python = "3.14"
 uv = "latest"
 git-cliff = "latest"
+node = "24"
 
 [env]
 _.python.venv = { path = ".venv", create = true }
 
 [tasks.install]
 description = "Sync all locked dependencies"
-run = "uv venv --clear .venv && uv sync --python .venv --all-extras --dev"
+run = "uv venv --clear .venv && uv sync --python .venv --all-extras --dev && npm --prefix frontend ci"
 
 [tasks.format]
 description = "Format Python files"
@@ -27,9 +28,30 @@ run = "uv run mypy src tests"
 description = "Run tests with coverage"
 run = "uv run pytest --cov=link_hoarder --cov-report=term-missing --cov-fail-under=70"
 
+[tasks.frontend-generate]
+description = "Generate frontend types from OpenAPI"
+depends = ["openapi"]
+run = "npm --prefix frontend run generate:api"
+
+[tasks.frontend-typecheck]
+description = "Type-check the Vue frontend"
+run = "npm --prefix frontend run typecheck"
+
+[tasks.frontend-test]
+description = "Test the Vue frontend"
+run = "npm --prefix frontend test"
+
+[tasks.frontend-build]
+description = "Build the Vue frontend"
+run = "npm --prefix frontend run build"
+
+[tasks.frontend-check]
+description = "Run every frontend gate"
+run = "npm --prefix frontend run typecheck && npm --prefix frontend test && npm --prefix frontend run build"
+
 [tasks.check]
 description = "Run every local gate"
-depends = ["lint", "typecheck", "test"]
+depends = ["lint", "typecheck", "test", "frontend-check"]
 
 [tasks.hooks]
 description = "Install Git pre-commit hooks"
@@ -52,13 +74,17 @@ run = "uv run python -m link_hoarder.api.openapi"
 description = "Run the authenticated API"
 run = "uv run link-hoarder api"
 
+[tasks.serve-web]
+description = "Build and serve the integrated web application"
+run = "docker compose -f stack/compose.yaml up --build"
+
 [tasks.stack-up]
 description = "Build and start the Docker stack"
-run = "docker compose --env-file stack/.env -f stack/compose.yaml up --build -d"
+run = "docker compose -f stack/compose.yaml up --build -d"
 
 [tasks.stack-down]
 description = "Stop the Docker stack"
-run = "docker compose --env-file stack/.env -f stack/compose.yaml down"
+run = "docker compose -f stack/compose.yaml down"
 
 [tasks.changelog]
 description = "Generate the changelog from Conventional Commits"
