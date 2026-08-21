@@ -27,6 +27,21 @@ def test_cli_crud(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     assert json.loads(listed.stdout)[0]["tags"] == ["docs"]
 
 
+def test_cli_creates_javascript_bookmarklet(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Given a JavaScript URL, the CLI stores it without executing it."""
+    monkeypatch.setenv("LINK_HOARDER_DATABASE_PATH", str(tmp_path / "cli.db"))
+
+    result = runner.invoke(
+        app,
+        ["create", "javascript:alert('hello')", "--title", "Bookmarklet"],
+    )
+
+    assert result.exit_code == 0
+    assert json.loads(result.stdout)["url"] == "javascript:alert('hello')"
+
+
 def test_cli_update_delete_and_import(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

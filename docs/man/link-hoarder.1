@@ -6,7 +6,7 @@ link-hoarder \- manage bookmarks and import browser profiles
 .I COMMAND
 .RI [ OPTIONS ]
 .SH DESCRIPTION
-Link Hoarder stores bookmarks in SQLite. Commands return bookmark data as JSON.
+Link Hoarder stores bookmarks in SQLite. Commands return bookmark data as JSON. Bookmark URLs can use HTTP, HTTPS, or javascript: schemes. Link Hoarder stores bookmarklets but does not execute them.
 .SH COMMANDS
 .TP
 .B create URL --title TITLE

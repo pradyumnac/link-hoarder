@@ -71,8 +71,8 @@ def test_read_chromium_nested_bookmark(tmp_path: Path) -> None:
     assert bookmarks[0].url == "https://python.org/"
 
 
-def test_read_chromium_skips_unsupported_url(tmp_path: Path) -> None:
-    """Given a Chromium bookmarklet, the importer skips it without failing."""
+def test_read_chromium_imports_bookmarklet(tmp_path: Path) -> None:
+    """Given a Chromium bookmarklet, the importer preserves its JavaScript URL."""
     profile = tmp_path / "Bookmarks"
     profile.write_text(
         json.dumps(
@@ -100,7 +100,10 @@ def test_read_chromium_skips_unsupported_url(tmp_path: Path) -> None:
 
     bookmarks = read_profile(Browser.CHROME, profile)
 
-    assert [bookmark.url for bookmark in bookmarks] == ["https://example.com/"]
+    assert [bookmark.url for bookmark in bookmarks] == [
+        "javascript:alert('unsupported')",
+        "https://example.com/",
+    ]
 
 
 def test_read_firefox_bookmark(tmp_path: Path) -> None:

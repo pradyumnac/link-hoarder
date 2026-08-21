@@ -49,6 +49,18 @@ def test_api_crud(tmp_path: Path) -> None:
     assert deleted.status_code == 204
 
 
+def test_api_creates_javascript_bookmarklet(tmp_path: Path) -> None:
+    """Given a JavaScript URL, the API stores it without executing it."""
+    response = _client(tmp_path).post(
+        "/bookmarks",
+        headers={"X-API-Key": "test-key"},
+        json={"url": "javascript:alert('hello')", "title": "Bookmarklet"},
+    )
+
+    assert response.status_code == 201
+    assert response.json()["url"] == "javascript:alert('hello')"
+
+
 def test_api_import_rejects_missing_profile(tmp_path: Path) -> None:
     """Given a missing profile file, the API returns a validation response."""
     response = _client(tmp_path).post(

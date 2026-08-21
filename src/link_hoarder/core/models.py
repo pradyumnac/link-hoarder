@@ -10,6 +10,13 @@ from sqlmodel import Field, SQLModel
 _URL_ADAPTER = TypeAdapter(HttpUrl)
 
 
+def _validate_bookmark_url(value: str) -> str:
+    """Validate an HTTP, HTTPS, or JavaScript bookmark URL."""
+    if value.lower().startswith("javascript:"):
+        return value
+    return str(_URL_ADAPTER.validate_python(value))
+
+
 class Browser(StrEnum):
     """Supported browser families."""
 
@@ -41,8 +48,8 @@ class BookmarkFields(SQLModel):
     @field_validator("url")
     @classmethod
     def validate_url(cls, value: str) -> str:
-        """Require an HTTP or HTTPS URL."""
-        return str(_URL_ADAPTER.validate_python(value))
+        """Require an HTTP, HTTPS, or JavaScript URL."""
+        return _validate_bookmark_url(value)
 
 
 class BookmarkRecord(BookmarkFields, table=True):
@@ -73,7 +80,7 @@ class BookmarkUpdate(SQLModel):
         """Validate a URL when the update includes one."""
         if value is None:
             return None
-        return str(_URL_ADAPTER.validate_python(value))
+        return _validate_bookmark_url(value)
 
 
 class BookmarkRead(BookmarkFields):

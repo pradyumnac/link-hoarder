@@ -1,6 +1,8 @@
 # CLI reference
 
-Run `link-hoarder COMMAND --help` for full option details.
+Run `link-hoarder COMMAND --help` for full option details. Bookmark URLs can use
+HTTP, HTTPS, or `javascript:` schemes. Link Hoarder stores bookmarklets but does
+not execute them.
 
 | Command | Purpose |
 | --- | --- |

@@ -29,7 +29,9 @@ def _repository(settings: Settings) -> BookmarkRepository:
 
 @app.command("create")
 def create_bookmark(
-    url: Annotated[str, typer.Argument(help="HTTP or HTTPS bookmark URL.")],
+    url: Annotated[
+        str, typer.Argument(help="HTTP, HTTPS, or JavaScript bookmark URL.")
+    ],
     title: Annotated[str, typer.Option("--title", "-t", help="Bookmark title.")],
     folder: Annotated[str | None, typer.Option(help="Optional folder path.")] = None,
     tag: Annotated[
@@ -80,7 +82,9 @@ def get_bookmark(
 @app.command("update")
 def update_bookmark(
     bookmark_id: Annotated[int, typer.Argument(min=1, help="Bookmark identifier.")],
-    url: Annotated[str | None, typer.Option(help="New HTTP or HTTPS URL.")] = None,
+    url: Annotated[
+        str | None, typer.Option(help="New HTTP, HTTPS, or JavaScript URL.")
+    ] = None,
     title: Annotated[
         str | None, typer.Option("--title", "-t", help="New title.")
     ] = None,

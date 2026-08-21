@@ -30,7 +30,15 @@ def test_repository_unknown_identifier(repository: BookmarkRepository) -> None:
     assert not repository.delete(999)
 
 
+def test_bookmark_accepts_javascript_url() -> None:
+    """Given a JavaScript bookmarklet, bookmark validation preserves its URL."""
+    bookmark = BookmarkCreate(url="javascript:alert('hello')", title="Bookmarklet")
+
+    assert bookmark.url == "javascript:alert('hello')"
+    assert BookmarkUpdate(url="JAVASCRIPT:void(0)").url == "JAVASCRIPT:void(0)"
+
+
 def test_bookmark_rejects_invalid_url() -> None:
-    """Given a non-HTTP URL, bookmark validation rejects the input."""
+    """Given a non-URL string, bookmark validation rejects the input."""
     with pytest.raises(ValidationError):
         BookmarkCreate(url="not-a-url", title="Invalid")
