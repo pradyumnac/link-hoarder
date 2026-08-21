@@ -5,6 +5,7 @@
 ### Added
 
 - Support JavaScript bookmarklets in the CLI, API, and browser imports (core-bookmarklet-support).
+- Automatically tag JavaScript bookmarklets and search bookmark tags (core-bookmarklet-tags).
 - Add typed SQLite bookmark CRUD (core-storage-crud, ADR-0001).
 - Import native Chromium and Firefox profiles (import-profile-native, ADR-0001).
 - Expose CRUD and imports through Typer (cli-command-surface, ADR-0001).

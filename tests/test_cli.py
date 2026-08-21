@@ -40,6 +40,7 @@ def test_cli_creates_javascript_bookmarklet(
 
     assert result.exit_code == 0
     assert json.loads(result.stdout)["url"] == "javascript:alert('hello')"
+    assert json.loads(result.stdout)["tags"] == ["bookmarklet"]
 
 
 def test_cli_update_delete_and_import(

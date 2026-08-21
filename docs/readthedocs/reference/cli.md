@@ -2,7 +2,8 @@
 
 Run `link-hoarder COMMAND --help` for full option details. Bookmark URLs can use
 HTTP, HTTPS, or `javascript:` schemes. Link Hoarder stores bookmarklets but does
-not execute them.
+not execute them. It automatically adds the `bookmarklet` tag to each JavaScript
+bookmarklet.
 
 | Command | Purpose |
 | --- | --- |

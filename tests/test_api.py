@@ -59,6 +59,7 @@ def test_api_creates_javascript_bookmarklet(tmp_path: Path) -> None:
 
     assert response.status_code == 201
     assert response.json()["url"] == "javascript:alert('hello')"
+    assert response.json()["tags"] == ["bookmarklet"]
 
 
 def test_api_import_rejects_missing_profile(tmp_path: Path) -> None:

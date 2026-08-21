@@ -30,12 +30,29 @@ def test_repository_unknown_identifier(repository: BookmarkRepository) -> None:
     assert not repository.delete(999)
 
 
-def test_bookmark_accepts_javascript_url() -> None:
-    """Given a JavaScript bookmarklet, bookmark validation preserves its URL."""
-    bookmark = BookmarkCreate(url="javascript:alert('hello')", title="Bookmarklet")
+def test_bookmark_tags_javascript_url() -> None:
+    """Given a JavaScript bookmarklet, validation adds its identifying tag once."""
+    bookmark = BookmarkCreate(
+        url="javascript:alert('hello')",
+        title="Bookmarklet",
+        tags=["tools", "bookmarklet"],
+    )
 
     assert bookmark.url == "javascript:alert('hello')"
+    assert bookmark.tags == ["tools", "bookmarklet"]
+    assert BookmarkCreate(url="JAVASCRIPT:void(0)", title="Uppercase").tags == [
+        "bookmarklet"
+    ]
     assert BookmarkUpdate(url="JAVASCRIPT:void(0)").url == "JAVASCRIPT:void(0)"
+
+
+def test_repository_searches_tags(repository: BookmarkRepository) -> None:
+    """Given a tagged bookmark, a list query finds its tag."""
+    created = repository.create(
+        BookmarkCreate(url="javascript:alert('hello')", title="Bookmarklet")
+    )
+
+    assert repository.list(query="bookmarklet") == [created]
 
 
 def test_bookmark_rejects_invalid_url() -> None:

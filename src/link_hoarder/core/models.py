@@ -3,16 +3,21 @@
 from datetime import UTC, datetime
 from enum import StrEnum
 
-from pydantic import HttpUrl, TypeAdapter, field_validator
+from pydantic import HttpUrl, TypeAdapter, field_validator, model_validator
 from sqlalchemy import JSON, Column
 from sqlmodel import Field, SQLModel
 
 _URL_ADAPTER = TypeAdapter(HttpUrl)
 
 
+def _is_bookmarklet(value: str) -> bool:
+    """Return whether a URL is a JavaScript bookmarklet."""
+    return value.lower().startswith("javascript:")
+
+
 def _validate_bookmark_url(value: str) -> str:
     """Validate an HTTP, HTTPS, or JavaScript bookmark URL."""
-    if value.lower().startswith("javascript:"):
+    if _is_bookmarklet(value):
         return value
     return str(_URL_ADAPTER.validate_python(value))
 
@@ -64,6 +69,13 @@ class BookmarkRecord(BookmarkFields, table=True):
 
 class BookmarkCreate(BookmarkFields):
     """Bookmark creation input."""
+
+    @model_validator(mode="after")
+    def tag_bookmarklet(self) -> BookmarkCreate:
+        """Add the bookmarklet tag to JavaScript URLs."""
+        if _is_bookmarklet(self.url) and "bookmarklet" not in self.tags:
+            self.tags.append("bookmarklet")
+        return self
 
 
 class BookmarkUpdate(SQLModel):

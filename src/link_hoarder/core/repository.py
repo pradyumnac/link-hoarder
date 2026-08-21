@@ -5,6 +5,7 @@ from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
+from sqlalchemy import String, cast
 from sqlalchemy.engine import Engine
 from sqlalchemy.pool import NullPool
 from sqlmodel import Session, SQLModel, col, create_engine, select
@@ -91,6 +92,7 @@ class BookmarkRepository:
             statement = statement.where(
                 col(BookmarkRecord.title).contains(query)
                 | col(BookmarkRecord.url).contains(query)
+                | cast(col(BookmarkRecord.tags), String).contains(query)
             )
         with self.session() as session:
             result = session.exec(statement)

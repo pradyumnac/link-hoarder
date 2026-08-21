@@ -104,6 +104,8 @@ def test_read_chromium_imports_bookmarklet(tmp_path: Path) -> None:
         "javascript:alert('unsupported')",
         "https://example.com/",
     ]
+    assert bookmarks[0].tags == ["bookmarklet"]
+    assert bookmarks[1].tags == []
 
 
 def test_read_firefox_bookmark(tmp_path: Path) -> None:
