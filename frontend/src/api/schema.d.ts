@@ -236,7 +236,7 @@ export interface components {
          * @description Bookmark import warning category.
          * @enum {string}
          */
-        ImportWarningCode: "bookmark_invalid" | "bookmark_store_failed" | "profile_invalid" | "profile_unreadable";
+        ImportWarningCode: "bookmark_invalid" | "bookmark_duplicate" | "bookmark_store_failed" | "profile_invalid" | "profile_unreadable";
         /** ValidationError */
         ValidationError: {
             /** Context */

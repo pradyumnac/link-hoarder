@@ -118,6 +118,7 @@ class ImportWarningCode(StrEnum):
     """Bookmark import warning category."""
 
     BOOKMARK_INVALID = "bookmark_invalid"
+    BOOKMARK_DUPLICATE = "bookmark_duplicate"
     BOOKMARK_STORE_FAILED = "bookmark_store_failed"
     PROFILE_INVALID = "profile_invalid"
     PROFILE_UNREADABLE = "profile_unreadable"

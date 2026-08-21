@@ -322,6 +322,7 @@
         "description": "Bookmark import warning category.",
         "enum": [
           "bookmark_invalid",
+          "bookmark_duplicate",
           "bookmark_store_failed",
           "profile_invalid",
           "profile_unreadable"

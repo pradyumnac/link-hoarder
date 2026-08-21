@@ -93,8 +93,9 @@ describe("App", () => {
     await wrapper.get(".import-form").trigger("submit");
     await flushPromises();
 
-    expect(wrapper.get(".notification-count").text()).toBe("1");
+    expect(wrapper.get(".notification-count").text()).toBe("2");
     await wrapper.get(".notification-button").trigger("click");
+    expect(wrapper.get(".notification-list").text()).toContain("Imported 0; skipped 0.");
     expect(wrapper.get(".notification-list").text()).toContain("One bookmark is invalid.");
     expect(wrapper.get(".notice").text()).toContain("1 warning is in Notifications.");
   });
@@ -117,7 +118,7 @@ describe("App", () => {
 
     expect(wrapper.find(".notification-count").exists()).toBe(false);
     await wrapper.get(".clear-notification").trigger("click");
-    expect(wrapper.get(".notification-panel").text()).toContain("No failure events.");
+    expect(wrapper.get(".notification-panel").text()).toContain("No events.");
   });
 
   /** Given a failed create request, the event is recorded and bookmarks remain visible. */

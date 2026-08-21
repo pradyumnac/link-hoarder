@@ -9,7 +9,7 @@
 - Save each setup mode and install all user wrapper scripts.
 - Start the local API with Docker Compose during local API setup.
 - Build the Python package and container image.
-- Show import warnings in the browser notification center.
+- Show import summaries and warnings in the browser notification center.
 
 ## Alternate flows
 
@@ -20,6 +20,7 @@
 - Override the saved backend with an environment variable or `--backend`.
 - Configure an existing remote API instead of a local API.
 - Record failed create, update, delete, list, and import operations as notification events.
+- Record duplicate imports as warning events.
 
 ## Edge flows
 
@@ -29,6 +30,7 @@
 - Encode a full bookmark URL in an API lookup query.
 - Keep API keys out of configuration and setup output.
 - Mark all notification events as read and clear one event.
+- Show the import summary when an import has no warnings.
 
 ## Negative flows
 

@@ -314,11 +314,25 @@ def _store_profile_result(
     for bookmark in profile_result.bookmarks:
         if repository.find_by_url(bookmark.url) is not None:
             skipped += 1
+            warnings.append(
+                _warning(
+                    ImportWarningCode.BOOKMARK_DUPLICATE,
+                    f"The bookmark '{_short_title(bookmark.title)}' was skipped because it already exists.",
+                    profile,
+                )
+            )
             continue
         try:
             repository.create(bookmark)
         except DuplicateBookmarkError:
             skipped += 1
+            warnings.append(
+                _warning(
+                    ImportWarningCode.BOOKMARK_DUPLICATE,
+                    f"The bookmark '{_short_title(bookmark.title)}' was skipped because it already exists.",
+                    profile,
+                )
+            )
             continue
         except BookmarkStorageError as error:
             logger.warning(

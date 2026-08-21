@@ -208,6 +208,8 @@ def test_import_skips_existing_url(
     assert first.imported == 1
     assert second.imported == 0
     assert second.skipped == 1
+    assert second.warnings[0].code == "bookmark_duplicate"
+    assert "already exists" in second.warnings[0].message
 
 
 def test_import_warns_for_malformed_profile(

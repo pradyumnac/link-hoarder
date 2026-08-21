@@ -18,7 +18,7 @@ const query = ref("");
 const error = ref("");
 const notice = ref("");
 const loading = ref(false);
-interface FailureEvent {
+interface NotificationEvent {
   id: number;
   message: string;
   operation: string;
@@ -29,35 +29,35 @@ interface FailureEvent {
 const editingId = ref<number | null>(null);
 const importFile = ref<File | null>(null);
 const notificationOpen = ref(false);
-const failureEvents = ref<FailureEvent[]>([]);
+const notificationEvents = ref<NotificationEvent[]>([]);
 const form = reactive({ folder: "", tags: "", title: "", url: "" });
-let nextFailureEventId = 1;
+let nextNotificationEventId = 1;
 
 const currentPage = computed(() => Math.floor(offset.value / PAGE_SIZE) + 1);
 const pageCount = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)));
-const unreadFailureCount = computed(
-  () => failureEvents.value.filter((event) => event.unread).length,
+const unreadEventCount = computed(
+  () => notificationEvents.value.filter((event) => event.unread).length,
 );
 
-function recordFailure(operation: string, message: string): void {
-  failureEvents.value.unshift({
-    id: nextFailureEventId,
+function recordEvent(operation: string, message: string): void {
+  notificationEvents.value.unshift({
+    id: nextNotificationEventId,
     message,
     operation,
     occurredAt: new Date(),
     unread: true,
   });
-  nextFailureEventId += 1;
+  nextNotificationEventId += 1;
 }
 
-function markAllFailuresRead(): void {
-  for (const event of failureEvents.value) {
+function markAllEventsRead(): void {
+  for (const event of notificationEvents.value) {
     event.unread = false;
   }
 }
 
-function clearFailure(eventId: number): void {
-  failureEvents.value = failureEvents.value.filter((event) => event.id !== eventId);
+function clearEvent(eventId: number): void {
+  notificationEvents.value = notificationEvents.value.filter((event) => event.id !== eventId);
 }
 
 function formatEventTime(occurredAt: Date): string {
@@ -73,7 +73,7 @@ async function loadBookmarks(): Promise<void> {
     total.value = page.total;
   } catch (caught) {
     error.value = messageFrom(caught);
-    recordFailure("Load bookmarks", error.value);
+    recordEvent("Load bookmarks", error.value);
   } finally {
     loading.value = false;
   }
@@ -109,7 +109,7 @@ async function saveBookmark(): Promise<void> {
     await loadBookmarks();
   } catch (caught) {
     error.value = messageFrom(caught);
-    recordFailure(editingId.value === null ? "Create bookmark" : "Update bookmark", error.value);
+    recordEvent(editingId.value === null ? "Create bookmark" : "Update bookmark", error.value);
   }
 }
 
@@ -135,7 +135,7 @@ async function removeBookmark(bookmark: Bookmark): Promise<void> {
     await loadBookmarks();
   } catch (caught) {
     error.value = messageFrom(caught);
-    recordFailure("Delete bookmark", error.value);
+    recordEvent("Delete bookmark", error.value);
   }
 }
 
@@ -165,7 +165,7 @@ function selectImportFile(event: Event): void {
 async function runImport(): Promise<void> {
   if (importFile.value === null) {
     error.value = "Select a bookmark HTML export file.";
-    recordFailure("Import bookmarks", error.value);
+    recordEvent("Import bookmarks", error.value);
     return;
   }
   try {
@@ -173,16 +173,17 @@ async function runImport(): Promise<void> {
     const summary = `Imported ${result.imported}; skipped ${result.skipped}.`;
     const warnings = result.warnings ?? [];
     for (const warning of warnings) {
-      recordFailure("Import bookmarks", warning.message);
+      recordEvent("Import warning", warning.message);
     }
     const warningSummary = warnings.length === 1
       ? "1 warning is in Notifications."
       : `${warnings.length} warnings are in Notifications.`;
+    recordEvent("Import complete", summary);
     notice.value = warnings.length > 0 ? `${summary} ${warningSummary}` : summary;
     await loadBookmarks();
   } catch (caught) {
     error.value = messageFrom(caught);
-    recordFailure("Import bookmarks", error.value);
+    recordEvent("Import bookmarks", error.value);
   }
 }
 
@@ -211,7 +212,7 @@ onMounted(loadBookmarks);
           <svg aria-hidden="true" viewBox="0 0 24 24">
             <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" />
           </svg>
-          <span v-if="unreadFailureCount > 0" class="notification-count">{{ unreadFailureCount }}</span>
+          <span v-if="unreadEventCount > 0" class="notification-count">{{ unreadEventCount }}</span>
         </button>
         <section
           v-if="notificationOpen"
@@ -220,17 +221,17 @@ onMounted(loadBookmarks);
           aria-labelledby="notification-heading"
         >
           <div class="notification-heading">
-            <h2 id="notification-heading">Failures</h2>
+            <h2 id="notification-heading">Events</h2>
             <button
               class="text-button mark-read"
               type="button"
-              :disabled="unreadFailureCount === 0"
-              @click="markAllFailuresRead"
+              :disabled="unreadEventCount === 0"
+              @click="markAllEventsRead"
             >Mark all read</button>
           </div>
-          <p v-if="failureEvents.length === 0" class="notification-empty">No failure events.</p>
+          <p v-if="notificationEvents.length === 0" class="notification-empty">No events.</p>
           <ul v-else class="notification-list">
-            <li v-for="event in failureEvents" :key="event.id" :class="{ unread: event.unread }">
+            <li v-for="event in notificationEvents" :key="event.id" :class="{ unread: event.unread }">
               <div>
                 <strong>{{ event.operation }}</strong>
                 <p>{{ event.message }}</p>
@@ -239,8 +240,8 @@ onMounted(loadBookmarks);
               <button
                 class="clear-notification"
                 type="button"
-                :aria-label="`Clear ${event.operation} failure`"
-                @click="clearFailure(event.id)"
+                :aria-label="`Clear ${event.operation} event`"
+                @click="clearEvent(event.id)"
               >×</button>
             </li>
           </ul>
