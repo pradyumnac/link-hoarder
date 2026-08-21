@@ -81,9 +81,9 @@ Test these cases in Swagger UI:
 
 1. Call `/health` without a key. Confirm HTTP 401.
 2. Authorize with `test-secret`.
-3. Create a bookmark with `/bookmarks`.
+3. Create a bookmark with `/api/v1/bookmarks`.
 4. List, update, and delete the bookmark.
-5. Call `/imports/browser` with a missing profile. Confirm HTTP 422.
+5. Call `/api/v1/imports/browser` with a missing profile. Confirm HTTP 422.
 
 ## 5. Build the package
 

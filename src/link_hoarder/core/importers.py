@@ -16,7 +16,7 @@ from link_hoarder.core.models import (
     Browser,
     ImportResult,
 )
-from link_hoarder.core.repository import BookmarkRepository
+from link_hoarder.core.repository import BookmarkRepository, DuplicateBookmarkError
 
 
 class ChromeNode(BaseModel):
@@ -91,7 +91,11 @@ def import_profiles(
             if repository.find_by_url(bookmark.url) is not None:
                 skipped += 1
                 continue
-            repository.create(bookmark)
+            try:
+                repository.create(bookmark)
+            except DuplicateBookmarkError:
+                skipped += 1
+                continue
             imported += 1
     return ImportResult(
         browser=browser,

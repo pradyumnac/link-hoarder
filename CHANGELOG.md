@@ -13,6 +13,7 @@
 
 ### Changed
 
+- Add a versioned API contract, pagination, duplicate protection, and profile uploads (api-contract-v1).
 - Add containers, tasks, official library skills, and release workflows (infra-stack-release, ADR-0001).
 - Verify core, CLI, API, and packaging flows (test-release-gates, ADR-0001).
 

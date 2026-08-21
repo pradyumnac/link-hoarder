@@ -18,7 +18,7 @@ def _is_bookmarklet(value: str) -> bool:
 def _validate_bookmark_url(value: str) -> str:
     """Validate an HTTP, HTTPS, or JavaScript bookmark URL."""
     if _is_bookmarklet(value):
-        return value
+        return f"javascript:{value[11:]}"
     return str(_URL_ADAPTER.validate_python(value))
 
 
@@ -44,7 +44,7 @@ class BookmarkSource(StrEnum):
 class BookmarkFields(SQLModel):
     """Fields shared by bookmark input and storage models."""
 
-    url: str = Field(index=True, min_length=1, max_length=2048)
+    url: str = Field(index=True, unique=True, min_length=1, max_length=2048)
     title: str = Field(min_length=1, max_length=512)
     folder: str | None = Field(default=None, max_length=1024)
     tags: list[str] = Field(default_factory=list, sa_column=Column(JSON))
@@ -101,6 +101,15 @@ class BookmarkRead(BookmarkFields):
     id: int
     created_at: datetime
     updated_at: datetime
+
+
+class BookmarkPage(SQLModel):
+    """Paginated bookmark output."""
+
+    items: list[BookmarkRead]
+    total: int
+    limit: int
+    offset: int
 
 
 class ImportRequest(SQLModel):

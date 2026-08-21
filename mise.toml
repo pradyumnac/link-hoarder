@@ -44,6 +44,10 @@ description = "Install the current wheel into the project venv"
 depends = ["install", "build"]
 run = "uv pip install --python .venv --no-deps --reinstall dist/link_hoarder-0.1.0-py3-none-any.whl"
 
+[tasks.openapi]
+description = "Generate the committed OpenAPI contract"
+run = "uv run python -m link_hoarder.api.openapi"
+
 [tasks.serve]
 description = "Run the authenticated API"
 run = "uv run link-hoarder api"

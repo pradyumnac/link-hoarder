@@ -5,8 +5,9 @@ from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
-from sqlalchemy import String, cast
+from sqlalchemy import String, cast, func
 from sqlalchemy.engine import Engine
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.pool import NullPool
 from sqlmodel import Session, SQLModel, col, create_engine, select
 
@@ -16,6 +17,14 @@ from link_hoarder.core.models import (
     BookmarkRecord,
     BookmarkUpdate,
 )
+
+
+class DuplicateBookmarkError(Exception):
+    """A bookmark already uses the normalized URL."""
+
+    def __init__(self, url: str) -> None:
+        super().__init__(f"A bookmark already uses URL {url}.")
+        self.url = url
 
 
 class BookmarkRepository:
@@ -40,6 +49,10 @@ class BookmarkRepository:
         if database and database != ":memory:":
             Path(database).parent.mkdir(parents=True, exist_ok=True)
         SQLModel.metadata.create_all(self._engine)
+        with self._engine.begin() as connection:
+            connection.exec_driver_sql(
+                "CREATE UNIQUE INDEX IF NOT EXISTS ux_bookmarks_url ON bookmarks (url)"
+            )
 
     def close(self) -> None:
         """Release database engine resources."""
@@ -56,7 +69,11 @@ class BookmarkRepository:
         record = BookmarkRecord.model_validate(bookmark)
         with self.session() as session:
             session.add(record)
-            session.commit()
+            try:
+                session.commit()
+            except IntegrityError as error:
+                session.rollback()
+                raise DuplicateBookmarkError(bookmark.url) from error
             session.refresh(record)
             return self._read(record)
 
@@ -101,6 +118,18 @@ class BookmarkRepository:
             finally:
                 result.close()
 
+    def count(self, *, query: str | None = None) -> int:
+        """Count bookmarks that match an optional text query."""
+        statement = select(func.count(col(BookmarkRecord.id)))
+        if query:
+            statement = statement.where(
+                col(BookmarkRecord.title).contains(query)
+                | col(BookmarkRecord.url).contains(query)
+                | cast(col(BookmarkRecord.tags), String).contains(query)
+            )
+        with self.session() as session:
+            return session.exec(statement).one()
+
     def update(self, bookmark_id: int, update: BookmarkUpdate) -> BookmarkRead | None:
         """Update one bookmark."""
         with self.session() as session:
@@ -111,7 +140,12 @@ class BookmarkRepository:
             record.sqlmodel_update(values)
             record.updated_at = datetime.now(UTC)
             session.add(record)
-            session.commit()
+            try:
+                session.commit()
+            except IntegrityError as error:
+                session.rollback()
+                duplicate_url = update.url or record.url
+                raise DuplicateBookmarkError(duplicate_url) from error
             session.refresh(record)
             return self._read(record)
 

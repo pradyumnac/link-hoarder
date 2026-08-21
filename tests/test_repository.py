@@ -4,7 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from link_hoarder.core.models import BookmarkCreate, BookmarkUpdate
-from link_hoarder.core.repository import BookmarkRepository
+from link_hoarder.core.repository import BookmarkRepository, DuplicateBookmarkError
 
 
 def test_repository_crud(repository: BookmarkRepository) -> None:
@@ -40,10 +40,26 @@ def test_bookmark_tags_javascript_url() -> None:
 
     assert bookmark.url == "javascript:alert('hello')"
     assert bookmark.tags == ["tools", "bookmarklet"]
-    assert BookmarkCreate(url="JAVASCRIPT:void(0)", title="Uppercase").tags == [
-        "bookmarklet"
-    ]
-    assert BookmarkUpdate(url="JAVASCRIPT:void(0)").url == "JAVASCRIPT:void(0)"
+    uppercase = BookmarkCreate(url="JAVASCRIPT:void(0)", title="Uppercase")
+    assert uppercase.url == "javascript:void(0)"
+    assert uppercase.tags == ["bookmarklet"]
+    assert BookmarkUpdate(url="JAVASCRIPT:void(0)").url == "javascript:void(0)"
+
+
+def test_repository_rejects_duplicate_url(repository: BookmarkRepository) -> None:
+    """Given a normalized URL conflict, create and update preserve unique URLs."""
+    first = repository.create(BookmarkCreate(url="https://example.com", title="First"))
+    second = repository.create(
+        BookmarkCreate(url="https://other.example", title="Second")
+    )
+
+    with pytest.raises(DuplicateBookmarkError):
+        repository.create(BookmarkCreate(url="https://example.com/", title="Duplicate"))
+    with pytest.raises(DuplicateBookmarkError):
+        repository.update(second.id, BookmarkUpdate(url=first.url))
+
+    assert repository.count() == 2
+    assert repository.get(second.id) == second
 
 
 def test_repository_searches_tags(repository: BookmarkRepository) -> None:
