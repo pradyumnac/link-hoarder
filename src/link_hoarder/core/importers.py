@@ -8,7 +8,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import cast
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from link_hoarder.core.models import (
     BookmarkCreate,
@@ -118,14 +118,16 @@ def _walk_chrome(
 ) -> list[BookmarkCreate]:
     if node.type == "url" and node.url:
         folder = "/".join(parents) or None
-        return [
-            BookmarkCreate(
+        try:
+            bookmark = BookmarkCreate(
                 url=node.url,
                 title=node.name or node.url,
                 folder=folder,
                 source=source,
             )
-        ]
+        except ValidationError:
+            return []
+        return [bookmark]
     next_parents = (*parents, node.name) if node.name else parents
     return [
         bookmark

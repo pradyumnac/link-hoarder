@@ -71,6 +71,38 @@ def test_read_chromium_nested_bookmark(tmp_path: Path) -> None:
     assert bookmarks[0].url == "https://python.org/"
 
 
+def test_read_chromium_skips_unsupported_url(tmp_path: Path) -> None:
+    """Given a Chromium bookmarklet, the importer skips it without failing."""
+    profile = tmp_path / "Bookmarks"
+    profile.write_text(
+        json.dumps(
+            {
+                "roots": {
+                    "bookmark_bar": {
+                        "children": [
+                            {
+                                "name": "Bookmarklet",
+                                "type": "url",
+                                "url": "javascript:alert('unsupported')",
+                            },
+                            {
+                                "name": "Example",
+                                "type": "url",
+                                "url": "https://example.com",
+                            },
+                        ]
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    bookmarks = read_profile(Browser.CHROME, profile)
+
+    assert [bookmark.url for bookmark in bookmarks] == ["https://example.com/"]
+
+
 def test_read_firefox_bookmark(tmp_path: Path) -> None:
     """Given a Firefox places database, the importer reads HTTP bookmarks."""
     profile = tmp_path / "places.sqlite"

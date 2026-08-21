@@ -95,30 +95,27 @@ Confirm that `dist/` contains a wheel and a source distribution. Git ignores bot
 
 ## 6. Install and test the wheel
 
-Install the local wheel as a uv tool:
+Install the local wheel into the project virtual environment:
 
 ```console
 mise run install-local
 ```
 
-Or run the command directly:
+The task uses `uv pip install --python .venv`. It does not install a uv tool or
+write to a user-level tool directory.
+
+Test the installed command through the project virtual environment:
 
 ```console
-uv tool install --force dist/link_hoarder-0.1.0-py3-none-any.whl
-```
-
-Test the installed command outside the repository:
-
-```console
-link-hoarder --help
+uv run link-hoarder --help
 ```
 
 Set `LINK_HOARDER_DATABASE_PATH` to a temporary path and repeat the CLI CRUD test.
 
-Check the installed executable path:
+Confirm the package is in the project virtual environment:
 
 ```console
-uv tool dir
+uv pip show --python .venv link-hoarder
 ```
 
 ## 7. Remove test data

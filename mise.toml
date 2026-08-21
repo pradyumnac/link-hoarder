@@ -9,7 +9,7 @@ _.python.venv = { path = ".venv", create = true }
 
 [tasks.install]
 description = "Sync all locked dependencies"
-run = "uv sync --all-extras"
+run = "uv venv --clear .venv && uv sync --python .venv --all-extras --dev"
 
 [tasks.format]
 description = "Format Python files"
@@ -40,9 +40,9 @@ description = "Build the wheel and source distribution"
 run = "uv build"
 
 [tasks.install-local]
-description = "Install the current wheel with uv"
-depends = ["build"]
-run = "uv tool install --force dist/link_hoarder-0.1.0-py3-none-any.whl"
+description = "Install the current wheel into the project venv"
+depends = ["install", "build"]
+run = "uv pip install --python .venv --no-deps --reinstall dist/link_hoarder-0.1.0-py3-none-any.whl"
 
 [tasks.serve]
 description = "Run the authenticated API"
