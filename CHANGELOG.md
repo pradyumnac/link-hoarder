@@ -4,6 +4,7 @@
 
 ### Added
 
+- Add a browser notification center for session failure events (core-failure-notifications).
 - Add interchangeable local and API CLI backends with interactive user setup (cli-backend-selection, ADR-0002).
 - Support JavaScript bookmarklets in the CLI, API, and browser imports (core-bookmarklet-support).
 - Automatically tag JavaScript bookmarklets and search bookmark tags (core-bookmarklet-tags).

@@ -18,12 +18,51 @@ const query = ref("");
 const error = ref("");
 const notice = ref("");
 const loading = ref(false);
+interface FailureEvent {
+  id: number;
+  message: string;
+  operation: string;
+  occurredAt: Date;
+  unread: boolean;
+}
+
 const editingId = ref<number | null>(null);
 const importFile = ref<File | null>(null);
+const notificationOpen = ref(false);
+const failureEvents = ref<FailureEvent[]>([]);
 const form = reactive({ folder: "", tags: "", title: "", url: "" });
+let nextFailureEventId = 1;
 
 const currentPage = computed(() => Math.floor(offset.value / PAGE_SIZE) + 1);
 const pageCount = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)));
+const unreadFailureCount = computed(
+  () => failureEvents.value.filter((event) => event.unread).length,
+);
+
+function recordFailure(operation: string, message: string): void {
+  failureEvents.value.unshift({
+    id: nextFailureEventId,
+    message,
+    operation,
+    occurredAt: new Date(),
+    unread: true,
+  });
+  nextFailureEventId += 1;
+}
+
+function markAllFailuresRead(): void {
+  for (const event of failureEvents.value) {
+    event.unread = false;
+  }
+}
+
+function clearFailure(eventId: number): void {
+  failureEvents.value = failureEvents.value.filter((event) => event.id !== eventId);
+}
+
+function formatEventTime(occurredAt: Date): string {
+  return occurredAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
 
 async function loadBookmarks(): Promise<void> {
   loading.value = true;
@@ -34,6 +73,7 @@ async function loadBookmarks(): Promise<void> {
     total.value = page.total;
   } catch (caught) {
     error.value = messageFrom(caught);
+    recordFailure("Load bookmarks", error.value);
   } finally {
     loading.value = false;
   }
@@ -69,6 +109,7 @@ async function saveBookmark(): Promise<void> {
     await loadBookmarks();
   } catch (caught) {
     error.value = messageFrom(caught);
+    recordFailure(editingId.value === null ? "Create bookmark" : "Update bookmark", error.value);
   }
 }
 
@@ -94,6 +135,7 @@ async function removeBookmark(bookmark: Bookmark): Promise<void> {
     await loadBookmarks();
   } catch (caught) {
     error.value = messageFrom(caught);
+    recordFailure("Delete bookmark", error.value);
   }
 }
 
@@ -123,18 +165,24 @@ function selectImportFile(event: Event): void {
 async function runImport(): Promise<void> {
   if (importFile.value === null) {
     error.value = "Select a bookmark HTML export file.";
+    recordFailure("Import bookmarks", error.value);
     return;
   }
   try {
     const result = await importBookmarkFile(importFile.value);
     const summary = `Imported ${result.imported}; skipped ${result.skipped}.`;
-    const warnings = (result.warnings ?? [])
-      .map((warning) => warning.message)
-      .join(" ");
-    notice.value = warnings ? `${summary} Warnings: ${warnings}` : summary;
+    const warnings = result.warnings ?? [];
+    for (const warning of warnings) {
+      recordFailure("Import bookmarks", warning.message);
+    }
+    const warningSummary = warnings.length === 1
+      ? "1 warning is in Notifications."
+      : `${warnings.length} warnings are in Notifications.`;
+    notice.value = warnings.length > 0 ? `${summary} ${warningSummary}` : summary;
     await loadBookmarks();
   } catch (caught) {
     error.value = messageFrom(caught);
+    recordFailure("Import bookmarks", error.value);
   }
 }
 
@@ -151,6 +199,53 @@ onMounted(loadBookmarks);
       <p class="eyebrow">Personal bookmark archive</p>
       <h1>Link Hoarder</h1>
       <p>Search, classify, and import bookmarks from one private workspace.</p>
+      <div class="notifications">
+        <button
+          class="notification-button"
+          type="button"
+          aria-controls="notification-panel"
+          :aria-expanded="notificationOpen"
+          aria-label="Notifications"
+          @click="notificationOpen = !notificationOpen"
+        >
+          <svg aria-hidden="true" viewBox="0 0 24 24">
+            <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" />
+          </svg>
+          <span v-if="unreadFailureCount > 0" class="notification-count">{{ unreadFailureCount }}</span>
+        </button>
+        <section
+          v-if="notificationOpen"
+          id="notification-panel"
+          class="notification-panel"
+          aria-labelledby="notification-heading"
+        >
+          <div class="notification-heading">
+            <h2 id="notification-heading">Failures</h2>
+            <button
+              class="text-button mark-read"
+              type="button"
+              :disabled="unreadFailureCount === 0"
+              @click="markAllFailuresRead"
+            >Mark all read</button>
+          </div>
+          <p v-if="failureEvents.length === 0" class="notification-empty">No failure events.</p>
+          <ul v-else class="notification-list">
+            <li v-for="event in failureEvents" :key="event.id" :class="{ unread: event.unread }">
+              <div>
+                <strong>{{ event.operation }}</strong>
+                <p>{{ event.message }}</p>
+                <time :datetime="event.occurredAt.toISOString()">{{ formatEventTime(event.occurredAt) }}</time>
+              </div>
+              <button
+                class="clear-notification"
+                type="button"
+                :aria-label="`Clear ${event.operation} failure`"
+                @click="clearFailure(event.id)"
+              >×</button>
+            </li>
+          </ul>
+        </section>
+      </div>
     </header>
 
     <p v-if="error" class="message error" role="alert">{{ error }}</p>

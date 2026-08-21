@@ -67,7 +67,8 @@ describe("App", () => {
     expect(wrapper.text()).toContain("Bookmark created.");
   });
 
-  it("shows browser import warnings with the import summary", async () => {
+  /** Given an import warning, the notification center shows one unread failure event. */
+  it("shows browser import warnings in the notification center", async () => {
     vi.mocked(api.importBookmarkFile).mockResolvedValue({
       format: "netscape_html",
       discovered: 1,
@@ -92,9 +93,34 @@ describe("App", () => {
     await wrapper.get(".import-form").trigger("submit");
     await flushPromises();
 
-    expect(wrapper.text()).toContain("Warnings: One bookmark is invalid.");
+    expect(wrapper.get(".notification-count").text()).toBe("1");
+    await wrapper.get(".notification-button").trigger("click");
+    expect(wrapper.get(".notification-list").text()).toContain("One bookmark is invalid.");
+    expect(wrapper.get(".notice").text()).toContain("1 warning is in Notifications.");
   });
 
+  /** Given one unread event, the user can mark it as read and clear it. */
+  it("manages notification read and clear state", async () => {
+    vi.mocked(api.importBookmarkFile).mockRejectedValue(new Error("Import failed"));
+    const wrapper = mount(App);
+    await flushPromises();
+    const input = wrapper.get('input[type="file"]');
+    Object.defineProperty(input.element, "files", {
+      value: [new File(["profile"], "Bookmarks")],
+    });
+
+    await input.trigger("change");
+    await wrapper.get(".import-form").trigger("submit");
+    await flushPromises();
+    await wrapper.get(".notification-button").trigger("click");
+    await wrapper.get(".mark-read").trigger("click");
+
+    expect(wrapper.find(".notification-count").exists()).toBe(false);
+    await wrapper.get(".clear-notification").trigger("click");
+    expect(wrapper.get(".notification-panel").text()).toContain("No failure events.");
+  });
+
+  /** Given a failed create request, the event is recorded and bookmarks remain visible. */
   it("shows an API failure without removing the current collection", async () => {
     vi.mocked(api.createBookmark).mockRejectedValue(new Error("URL conflict"));
     const wrapper = mount(App);
@@ -107,5 +133,19 @@ describe("App", () => {
 
     expect(wrapper.get('[role="alert"]').text()).toContain("URL conflict");
     expect(wrapper.text()).toContain("Reader");
+    expect(wrapper.get(".notification-count").text()).toBe("1");
+  });
+
+  /** Given no selected file, an import attempt creates a failure event. */
+  it("records missing import file validation", async () => {
+    const wrapper = mount(App);
+    await flushPromises();
+
+    await wrapper.get(".import-form").trigger("submit");
+
+    expect(wrapper.get('[role="alert"]').text()).toContain(
+      "Select a bookmark HTML export file.",
+    );
+    expect(wrapper.get(".notification-count").text()).toBe("1");
   });
 });
