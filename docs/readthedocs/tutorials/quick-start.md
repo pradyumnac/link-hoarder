@@ -1,6 +1,7 @@
 # Quick start
 
 This tutorial creates a bookmark and starts the API.
+It also points to the Docker web interface.
 
 ## Install the CLI
 
@@ -42,3 +43,9 @@ link-hoarder list
 
 On PowerShell, set the same three environment variables with `$env:`.
 Use the committed `docs/openapi.json` contract to call the API.
+
+## Continue with the web interface
+
+Start the Docker stack, then manage bookmarks in a browser.
+Follow [Run with Docker Compose](../how-to/run-with-docker.md).
+Then follow [Manage bookmarks in the web interface](../how-to/manage-bookmarks-web.md).

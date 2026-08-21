@@ -4,4 +4,5 @@ Use reference pages when you need exact commands, fields, or configuration value
 
 - [CLI reference](cli.md).
 - [HTTP API reference](api.md).
+- [Browser interface reference](browser-interface.md).
 - [Configuration reference](configuration.md).

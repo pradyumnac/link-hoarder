@@ -34,3 +34,16 @@ API mode requires an API URL and API key.
 The direct API process also requires `LINK_HOARDER_API_KEY`.
 The Docker stack generates and stores a key when the variable is not set.
 In Docker Compose, `LINK_HOARDER_PORT` selects the frontend host port.
+
+## Browser settings
+
+The web interface stores display settings in browser-local storage.
+The storage key is `link-hoarder.browser-settings`.
+These settings apply only to the current browser profile.
+
+| Setting | Values | Default | Purpose |
+| --- | --- | --- | --- |
+| Page size | `10`, `25`, or `50` | `10` | Set the number of bookmarks on each page. |
+| Default view | `list` or `gallery` | `list` | Select the initial collection view. |
+
+The web interface uses the defaults when the stored value is missing or invalid.

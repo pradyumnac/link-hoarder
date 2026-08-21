@@ -17,6 +17,25 @@ The first release provides these features:
 - Run the server with Docker Compose.
 - Publish Python packages, container images, and GitHub releases.
 
+### Browser interface requirements
+
+These requirements apply only to the browser interface:
+
+- Update search results as the user types.
+- Put icon-only Add, Search, and Import actions to the right of the search box.
+- Show bookmark HTML import controls in a modal dialog.
+- Support responsive layouts across screen sizes.
+- Provide gallery and list views with a left navigation pane.
+- Filter bookmarks by tag, bookmark type, and folder.
+- Show folder hierarchy navigation with breadcrumbs.
+- Store browser settings in browser-local storage.
+- Let the user set the page size and the default collection view.
+- Show bookmark creation and editing forms in modal dialogs.
+- Use more screen width on wide and 4K displays while keeping text readable.
+- Use accessible Unicode icons for bookmark actions, search, import close, and alert dismissal.
+- Show the Unicode Settings icon beside the Notifications icon.
+- Let the user type in the folder filter and show matching folders in its dropdown.
+
 The first release does not provide browser synchronization.
 
 ## Architecture

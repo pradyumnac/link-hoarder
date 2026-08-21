@@ -15,6 +15,7 @@ mise run stack-up
 ```
 
 Open `http://127.0.0.1:8080`. Set `LINK_HOARDER_PORT` in `stack/.env` to use a different port.
+Use [Manage bookmarks in the web interface](manage-bookmarks-web.md) for browser interface instructions.
 
 The API container generates a random API key during its first start.
 The secret volume keeps the key across container restarts.

@@ -17,5 +17,7 @@ You can also use the Vue web interface.
 
 - [Configure the CLI backend](how-to/configure-cli-backend.md).
 - [Import browser profiles](how-to/import-browser-profiles.md).
+- [Manage bookmarks in the web interface](how-to/manage-bookmarks-web.md).
 - [Run the web interface with Docker Compose](how-to/run-with-docker.md).
+- [Check browser interface controls](reference/browser-interface.md).
 - [Check all configuration values](reference/configuration.md).

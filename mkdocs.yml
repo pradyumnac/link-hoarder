@@ -30,12 +30,14 @@ nav:
       - Overview: how-to/index.md
       - Configure CLI backends: how-to/configure-cli-backend.md
       - Import browser profiles: how-to/import-browser-profiles.md
+      - Manage bookmarks in the web interface: how-to/manage-bookmarks-web.md
       - Run with Docker Compose: how-to/run-with-docker.md
       - Publish on Read the Docs: how-to/publish-read-the-docs.md
   - Reference:
       - Overview: reference/index.md
       - CLI: reference/cli.md
       - HTTP API: reference/api.md
+      - Browser interface: reference/browser-interface.md
       - Configuration: reference/configuration.md
   - Explanation:
       - Overview: explanation/index.md

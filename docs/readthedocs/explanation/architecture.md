@@ -8,6 +8,10 @@ The CLI uses a typed backend interface with SQLite and HTTP implementations.
 The import services use the same backend interface.
 This design keeps command behavior consistent across backends.
 
+The Vue browser interface calls the HTTP API through the frontend proxy.
+Browser-local storage contains display settings only.
+The server remains the source for bookmark data.
+
 SQLite gives each Link Hoarder server one portable file.
 SQLModel combines Pydantic validation with the object-relational mapping layer.
 

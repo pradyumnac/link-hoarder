@@ -92,7 +92,26 @@ Test these cases:
 5. Upload an invalid bookmark HTML export. Confirm a structured import warning.
 6. Confirm that `/docs` and `/openapi.json` return HTTP 404.
 
-## 5. Build the package
+## 5. Test responsive browser layouts
+
+Start the web interface and use browser responsive-design tools.
+
+Test these viewport widths:
+
+1. Use 3840 px to confirm the 4K layout uses the available width.
+2. Use 1920 px to confirm the wide desktop layout.
+3. Use 1080 px to confirm the standard desktop layout.
+4. Use 760 px to confirm the tablet layout.
+5. Use 320 px to confirm the minimum mobile layout.
+6. Change between the five widths while the import controls are open.
+
+Confirm that forms, bookmark cards, notifications, and pagination stay in the viewport.
+Confirm that wide layouts show more bookmark cards without excessive empty margins.
+Confirm that text lines remain readable on wide layouts.
+Confirm that all controls remain visible and usable.
+Confirm that the page does not have horizontal scrolling.
+
+## 6. Build the package
 
 ```console
 uv build
@@ -100,7 +119,7 @@ uv build
 
 Confirm that `dist/` contains a wheel and a source distribution. Git ignores both files.
 
-## 6. Install and test the wheel
+## 7. Install and test the wheel
 
 Install the local wheel into the project virtual environment:
 
@@ -125,7 +144,7 @@ Confirm the package is in the project virtual environment:
 uv pip show --python .venv link-hoarder
 ```
 
-## 7. Remove test data
+## 8. Remove test data
 
 Linux or macOS:
 
