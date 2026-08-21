@@ -515,6 +515,54 @@
         ]
       }
     },
+    "/api/v1/bookmarks/by-url": {
+      "get": {
+        "operationId": "get_bookmark_by_url_api_v1_bookmarks_by_url_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "url",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Url",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookmarkRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "summary": "Get Bookmark By Url",
+        "tags": [
+          "bookmarks"
+        ]
+      }
+    },
     "/api/v1/bookmarks/{bookmark_id}": {
       "delete": {
         "operationId": "delete_bookmark_api_v1_bookmarks__bookmark_id__delete",

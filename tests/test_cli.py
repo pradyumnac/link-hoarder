@@ -1,12 +1,17 @@
 """CLI integration tests."""
 
+import importlib
 import json
 from pathlib import Path
 
 import pytest
+from pydantic import HttpUrl, SecretStr
 from typer.testing import CliRunner
 
 from link_hoarder.cli.app import app
+from link_hoarder.core.repository import BookmarkRepository
+
+cli_module = importlib.import_module("link_hoarder.cli.app")
 
 runner = CliRunner()
 
@@ -104,6 +109,42 @@ def test_cli_imports_bookmark_html_export(
     assert result.exit_code == 0
     assert json.loads(result.stdout)["format"] == "netscape_html"
     assert json.loads(result.stdout)["imported"] == 1
+
+
+def test_cli_api_backend_crud_workflow(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Given API mode, the same CLI commands complete a remote-style workflow."""
+    repository = BookmarkRepository.from_path(tmp_path / "api.db")
+    repository.initialize()
+    monkeypatch.setenv("LINK_HOARDER_API_URL", "https://links.example")
+    monkeypatch.setenv("LINK_HOARDER_API_KEY", "a" * 32)
+
+    def api_backend(
+        api_url: HttpUrl, api_key: SecretStr, timeout: float
+    ) -> BookmarkRepository:
+        del api_url, api_key, timeout
+        return repository
+
+    monkeypatch.setattr(cli_module, "ApiBookmarkBackend", api_backend)
+
+    created = runner.invoke(
+        app,
+        [
+            "--backend",
+            "api",
+            "create",
+            "https://example.com",
+            "--title",
+            "Example",
+        ],
+    )
+    listed = runner.invoke(app, ["--backend", "api", "list"])
+
+    assert created.exit_code == 0
+    assert listed.exit_code == 0
+    assert json.loads(created.stdout)["title"] == "Example"
+    assert json.loads(listed.stdout)[0]["url"] == "https://example.com/"
 
 
 def test_cli_get_missing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

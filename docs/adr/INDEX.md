@@ -6,3 +6,4 @@ Rationale lives in each file under `docs/adr/`; this is an index only.
 | ADR | Status | Implemented | Decision |
 | --- | --- | --- | --- |
 | [0001](0001-application-architecture.md) | accepted | not-started | Application architecture |
+| [0002](0002-cli-backend-selection.md) | accepted | done | CLI backend selection |

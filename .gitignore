@@ -16,6 +16,7 @@ build/
 htmlcov/
 frontend/dist/
 frontend/node_modules/
+site/
 
 # Local application data and secrets
 *.db

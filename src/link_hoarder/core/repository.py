@@ -11,6 +11,7 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.pool import NullPool
 from sqlmodel import Session, SQLModel, col, create_engine, select
 
+from link_hoarder.core.backend import BookmarkStorageError, DuplicateBookmarkError
 from link_hoarder.core.models import (
     BookmarkCreate,
     BookmarkRead,
@@ -18,17 +19,7 @@ from link_hoarder.core.models import (
     BookmarkUpdate,
 )
 
-
-class BookmarkStorageError(Exception):
-    """The bookmark repository could not complete a write."""
-
-
-class DuplicateBookmarkError(Exception):
-    """A bookmark already uses the normalized URL."""
-
-    def __init__(self, url: str) -> None:
-        super().__init__(f"A bookmark already uses URL {url}.")
-        self.url = url
+__all__ = ["BookmarkRepository", "BookmarkStorageError", "DuplicateBookmarkError"]
 
 
 class BookmarkRepository:

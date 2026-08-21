@@ -12,6 +12,11 @@ from typing import cast
 import structlog
 from pydantic import BaseModel, Field, ValidationError
 
+from link_hoarder.core.backend import (
+    BookmarkBackend,
+    BookmarkStorageError,
+    DuplicateBookmarkError,
+)
 from link_hoarder.core.models import (
     BookmarkCreate,
     BookmarkSource,
@@ -20,11 +25,6 @@ from link_hoarder.core.models import (
     ImportResult,
     ImportWarning,
     ImportWarningCode,
-)
-from link_hoarder.core.repository import (
-    BookmarkRepository,
-    BookmarkStorageError,
-    DuplicateBookmarkError,
 )
 
 logger = structlog.get_logger(__name__)
@@ -167,7 +167,7 @@ def read_profile(browser: Browser, path: Path) -> ProfileReadResult:
 
 
 def import_profiles(
-    repository: BookmarkRepository,
+    repository: BookmarkBackend,
     browser: Browser,
     profile: Path | None = None,
 ) -> ImportResult:
@@ -227,7 +227,7 @@ def import_profiles(
 
 
 def import_html_export(
-    repository: BookmarkRepository,
+    repository: BookmarkBackend,
     path: Path,
 ) -> HtmlImportResult:
     """Import one Netscape bookmark HTML export."""
@@ -304,7 +304,7 @@ def read_html_export(path: Path) -> ProfileReadResult:
 
 
 def _store_profile_result(
-    repository: BookmarkRepository,
+    repository: BookmarkBackend,
     profile_result: ProfileReadResult,
     profile: Path,
 ) -> tuple[int, int, list[ImportWarning]]:

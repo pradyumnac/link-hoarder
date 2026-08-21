@@ -1,7 +1,7 @@
 # HTTP API reference
 
 Send `X-API-Key` with every request. The key must contain at least 32 characters.
-The committed contract is in [`docs/openapi.json`](../../openapi.json).
+The repository contains the [OpenAPI contract](https://github.com/pradyumnac/link-hoarder/blob/main/docs/openapi.json).
 Runtime documentation routes are disabled.
 
 Resource routes use the `/api/v1` prefix. The `/health` route is not versioned.

@@ -15,7 +15,7 @@ link-hoarder create https://example.com --title Example
 link-hoarder list
 ```
 
-## Start the API
+## Use an API backend
 
 Set an API key before you start the server.
 
@@ -31,4 +31,14 @@ $env:LINK_HOARDER_API_KEY = "replace-this-with-at-least-32-characters"
 link-hoarder api
 ```
 
+Open another terminal and select the API backend:
+
+```console
+export LINK_HOARDER_BACKEND=api
+export LINK_HOARDER_API_URL=http://127.0.0.1:8000
+export LINK_HOARDER_API_KEY="replace-this-with-at-least-32-characters"
+link-hoarder list
+```
+
+On PowerShell, set the same three environment variables with `$env:`.
 Use the committed `docs/openapi.json` contract to call the API.

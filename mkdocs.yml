@@ -1,0 +1,42 @@
+site_name: Link Hoarder
+site_description: Manage and import browser bookmarks through a CLI and API.
+repo_url: https://github.com/pradyumnac/link-hoarder
+repo_name: pradyumnac/link-hoarder
+edit_uri: edit/main/docs/readthedocs/
+docs_dir: docs/readthedocs
+site_dir: site
+strict: true
+
+theme:
+  name: readthedocs
+  highlightjs: true
+
+plugins:
+  - search
+
+markdown_extensions:
+  - admonition
+  - fenced_code
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Tutorials:
+      - Overview: tutorials/index.md
+      - Quick start: tutorials/quick-start.md
+  - How-to guides:
+      - Overview: how-to/index.md
+      - Configure CLI backends: how-to/configure-cli-backend.md
+      - Import browser profiles: how-to/import-browser-profiles.md
+      - Run with Docker Compose: how-to/run-with-docker.md
+      - Publish on Read the Docs: how-to/publish-read-the-docs.md
+  - Reference:
+      - Overview: reference/index.md
+      - CLI: reference/cli.md
+      - HTTP API: reference/api.md
+      - Configuration: reference/configuration.md
+  - Explanation:
+      - Overview: explanation/index.md
+      - Architecture: explanation/architecture.md

@@ -22,9 +22,10 @@ The first release does not provide browser synchronization.
 ## Architecture
 
 The `core` package owns models, storage, imports, configuration, and logging.
-The `cli` and `api` packages call the core interfaces.
+The `api` package calls the SQLite repository and import services.
+The `cli` package selects a SQLite or HTTP implementation of the core backend interface.
 
-SQLite is the only storage backend.
+Each Link Hoarder server stores data in SQLite.
 SQLModel provides the object-relational mapping layer.
 
 ## Glossary
@@ -35,4 +36,5 @@ SQLModel provides the object-relational mapping layer.
 | Browser profile | A native Chrome, Chromium, Edge, or Firefox profile directory. |
 | Import | A one-way copy from a browser profile or bookmark export into Link Hoarder. |
 | Core | The modules that implement behavior without a CLI or HTTP dependency. |
+| CLI backend | The local SQLite or HTTP implementation selected by the CLI. |
 | API key | The secret value that authorizes every HTTP request. |

@@ -49,9 +49,17 @@ run = "npm --prefix frontend run build"
 description = "Run every frontend gate"
 run = "npm --prefix frontend run typecheck && npm --prefix frontend test && npm --prefix frontend run build"
 
+[tasks.docs-build]
+description = "Build the production Read the Docs site"
+run = "uv run --group docs mkdocs build --strict --clean"
+
+[tasks.docs-serve]
+description = "Serve documentation with live reload"
+run = "uv run --group docs mkdocs serve"
+
 [tasks.check]
 description = "Run every local gate"
-depends = ["lint", "typecheck", "test", "frontend-check"]
+depends = ["lint", "typecheck", "test", "frontend-check", "docs-build"]
 
 [tasks.hooks]
 description = "Install Git pre-commit hooks"
@@ -65,6 +73,10 @@ run = "uv build"
 description = "Install the current wheel into the project venv"
 depends = ["install", "build"]
 run = "uv pip install --python .venv --no-deps --reinstall dist/link_hoarder-0.1.0-py3-none-any.whl"
+
+[tasks.setup-user]
+description = "Configure a user backend and install local wrapper scripts"
+run = "uv tool install --force . && uv run python -m link_hoarder.cli.setup_user"
 
 [tasks.openapi]
 description = "Generate the committed OpenAPI contract"

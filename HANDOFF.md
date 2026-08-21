@@ -6,9 +6,7 @@ Store unresolved session findings in this file. Move each finding to its permane
 
 | ID | Status | Task |
 | --- | --- | --- |
-| 1 | done | Define project architecture, policies, and dependency set |
-| 2 | done | Implement typed core models, SQLite CRUD, and browser importers |
-| 3 | done | Implement Typer CLI, FastAPI API-key API, and manual pages |
-| 4 | done | Add Docker stack, mise tasks, Library Skills, and release automation |
-| 5 | done | Add unit and integration tests for primary and failure flows |
-| 6 | done | Run all checks and verify Windows/Linux portability assumptions |
+| 1 | done | Add the MkDocs build dependency and production configuration |
+| 2 | done | Reorganize Read the Docs content into full Diataxis navigation |
+| 3 | done | Add concise README wrapper-mode samples and quirks |
+| 4 | done | Add mise documentation tasks and verify the production build |

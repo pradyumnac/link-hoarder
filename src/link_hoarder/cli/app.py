@@ -1,5 +1,8 @@
 """Typer command-line interface."""
 
+from collections.abc import Iterator
+from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated
 
@@ -8,7 +11,16 @@ import uvicorn
 from pydantic import ValidationError
 
 from link_hoarder.api.app import create_app
-from link_hoarder.core.config import Settings
+from link_hoarder.cli.api_backend import ApiBookmarkBackend
+from link_hoarder.core.backend import BookmarkBackend, BookmarkBackendError
+from link_hoarder.core.config import (
+    BackendKind,
+    CliConfigError,
+    Settings,
+    default_config_path,
+    load_cli_config,
+    resolve_cli_config,
+)
 from link_hoarder.core.importers import import_html_export, import_profiles
 from link_hoarder.core.logging import configure_logging
 from link_hoarder.core.models import (
@@ -21,19 +33,68 @@ from link_hoarder.core.repository import BookmarkRepository
 
 app = typer.Typer(
     name="link-hoarder",
-    help="Store bookmarks and import browser data.",
+    help="Store bookmarks locally or through a Link Hoarder API.",
     no_args_is_help=True,
 )
 
 
-def _repository(settings: Settings) -> BookmarkRepository:
-    repository = BookmarkRepository(settings.database_url)
-    repository.initialize()
-    return repository
+@dataclass(frozen=True)
+class CliState:
+    """Values selected by global CLI options."""
+
+    backend: BackendKind | None
+
+
+@app.callback()
+def select_backend(
+    context: typer.Context,
+    backend: Annotated[
+        BackendKind | None,
+        typer.Option(
+            "--backend",
+            help="Use the local SQLite or remote API backend.",
+            case_sensitive=False,
+        ),
+    ] = None,
+) -> None:
+    """Select global CLI settings."""
+    context.obj = CliState(backend=backend)
+
+
+@contextmanager
+def _backend(context: typer.Context) -> Iterator[BookmarkBackend]:
+    """Create the selected backend and convert failures to stable CLI errors."""
+    current: BookmarkBackend | None = None
+    try:
+        settings = Settings()
+        configure_logging(settings.log_level)
+        state = context.obj
+        selected = state.backend if isinstance(state, CliState) else None
+        config = resolve_cli_config(settings, selected)
+        if config.backend is BackendKind.LOCAL:
+            repository = BookmarkRepository(settings.database_url)
+            repository.initialize()
+            current = repository
+        else:
+            if config.api_url is None or config.api_key is None:
+                raise CliConfigError("API mode requires an API URL and API key.")
+            current = ApiBookmarkBackend(
+                config.api_url,
+                config.api_key,
+                config.api_timeout_seconds,
+            )
+        yield current
+    except (BookmarkBackendError, CliConfigError, ValidationError) as error:
+        typer.echo(str(error), err=True)
+        raise typer.Exit(2) from error
+    finally:
+        if current is not None:
+            current.close()
 
 
 @app.command("create")
 def create_bookmark(
+    context: typer.Context,
     url: Annotated[
         str, typer.Argument(help="HTTP, HTTPS, or JavaScript bookmark URL.")
     ],
@@ -44,17 +105,17 @@ def create_bookmark(
     ] = None,
 ) -> None:
     """Create one bookmark."""
-    settings = Settings()
-    configure_logging(settings.log_level)
     try:
         bookmark = BookmarkCreate(url=url, title=title, folder=folder, tags=tag or [])
     except ValidationError as error:
         raise typer.BadParameter(str(error)) from error
-    typer.echo(_repository(settings).create(bookmark).model_dump_json(indent=2))
+    with _backend(context) as backend:
+        typer.echo(backend.create(bookmark).model_dump_json(indent=2))
 
 
 @app.command("list")
 def list_bookmarks(
+    context: typer.Context,
     query: Annotated[
         str | None, typer.Option("--query", "-q", help="Search title and URL.")
     ] = None,
@@ -64,8 +125,8 @@ def list_bookmarks(
     offset: Annotated[int, typer.Option(min=0, help="Result offset.")] = 0,
 ) -> None:
     """List bookmarks as JSON."""
-    settings = Settings()
-    bookmarks = _repository(settings).list(query=query, limit=limit, offset=offset)
+    with _backend(context) as backend:
+        bookmarks = backend.list(query=query, limit=limit, offset=offset)
     typer.echo(
         "[\n" + ",\n".join(item.model_dump_json(indent=2) for item in bookmarks) + "\n]"
     )
@@ -73,11 +134,12 @@ def list_bookmarks(
 
 @app.command("get")
 def get_bookmark(
+    context: typer.Context,
     bookmark_id: Annotated[int, typer.Argument(min=1, help="Bookmark identifier.")],
 ) -> None:
     """Get one bookmark as JSON."""
-    settings = Settings()
-    bookmark = _repository(settings).get(bookmark_id)
+    with _backend(context) as backend:
+        bookmark = backend.get(bookmark_id)
     if bookmark is None:
         typer.echo(f"Bookmark {bookmark_id} was not found.", err=True)
         raise typer.Exit(1)
@@ -86,6 +148,7 @@ def get_bookmark(
 
 @app.command("update")
 def update_bookmark(
+    context: typer.Context,
     bookmark_id: Annotated[int, typer.Argument(min=1, help="Bookmark identifier.")],
     url: Annotated[
         str | None, typer.Option(help="New HTTP, HTTPS, or JavaScript URL.")
@@ -112,8 +175,8 @@ def update_bookmark(
         update = BookmarkUpdate.model_validate(values)
     except ValidationError as error:
         raise typer.BadParameter(str(error)) from error
-    settings = Settings()
-    bookmark = _repository(settings).update(bookmark_id, update)
+    with _backend(context) as backend:
+        bookmark = backend.update(bookmark_id, update)
     if bookmark is None:
         typer.echo(f"Bookmark {bookmark_id} was not found.", err=True)
         raise typer.Exit(1)
@@ -122,11 +185,13 @@ def update_bookmark(
 
 @app.command("delete")
 def delete_bookmark(
+    context: typer.Context,
     bookmark_id: Annotated[int, typer.Argument(min=1, help="Bookmark identifier.")],
 ) -> None:
     """Delete one bookmark."""
-    settings = Settings()
-    if not _repository(settings).delete(bookmark_id):
+    with _backend(context) as backend:
+        deleted = backend.delete(bookmark_id)
+    if not deleted:
         typer.echo(f"Bookmark {bookmark_id} was not found.", err=True)
         raise typer.Exit(1)
     typer.echo(f"Deleted bookmark {bookmark_id}.")
@@ -134,6 +199,7 @@ def delete_bookmark(
 
 @app.command("import-browser")
 def import_browser(
+    context: typer.Context,
     browser: Annotated[Browser, typer.Argument(help="Browser family.")],
     profile: Annotated[
         Path | None,
@@ -147,13 +213,14 @@ def import_browser(
     ] = None,
 ) -> None:
     """Import native browser profile bookmarks."""
-    settings = Settings()
-    result = import_profiles(_repository(settings), browser, profile)
+    with _backend(context) as backend:
+        result = import_profiles(backend, browser, profile)
     _emit_import_result(result)
 
 
 @app.command("import-file")
 def import_file(
+    context: typer.Context,
     path: Annotated[
         Path,
         typer.Argument(
@@ -166,9 +233,23 @@ def import_file(
     ],
 ) -> None:
     """Import a browser bookmark HTML export."""
-    settings = Settings()
-    result = import_html_export(_repository(settings), path)
+    with _backend(context) as backend:
+        result = import_html_export(backend, path)
     _emit_import_result(result)
+
+
+@app.command("config")
+def show_config() -> None:
+    """Show the saved CLI backend configuration without secrets."""
+    try:
+        config = load_cli_config()
+    except CliConfigError as error:
+        typer.echo(str(error), err=True)
+        raise typer.Exit(2) from error
+    typer.echo(f"Path: {default_config_path()}")
+    typer.echo(f"Backend: {config.backend.value}")
+    typer.echo(f"API URL: {config.api_url or 'not set'}")
+    typer.echo(f"API key: {'set' if config.api_key is not None else 'not set'}")
 
 
 @app.command("api")

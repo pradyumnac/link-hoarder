@@ -146,6 +146,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             offset=offset,
         )
 
+    @router.get("/bookmarks/by-url", tags=["bookmarks"])
+    def get_bookmark_by_url(url: Annotated[str, Query(min_length=1)]) -> BookmarkRead:
+        bookmark = repository.find_by_url(url)
+        if bookmark is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="A bookmark with this URL was not found.",
+            )
+        return bookmark
+
     @router.get("/bookmarks/{bookmark_id}", tags=["bookmarks"])
     def get_bookmark(bookmark_id: int) -> BookmarkRead:
         bookmark = repository.get(bookmark_id)

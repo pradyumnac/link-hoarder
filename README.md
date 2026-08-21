@@ -15,6 +15,7 @@ Link Hoarder stores browser bookmarks in SQLite. Use it through the CLI, the ver
 - Import native Chrome, Chromium, Edge, and Firefox profiles through the CLI.
 - Import standard bookmark HTML exports through the CLI or web interface.
 - Preserve JavaScript bookmarklets and add the `bookmarklet` tag automatically.
+- Use the same CLI commands with local SQLite or a remote HTTP API.
 - Run a local web stack with automatic API-key provisioning.
 
 ## Install
@@ -31,6 +32,55 @@ Install it as a uv tool:
 uv tool install link-hoarder
 ```
 
+From a source checkout, configure a backend and install local wrapper scripts:
+
+```console
+make setup-user
+```
+
+The setup task offers local SQLite, a local Docker API, and an existing remote API.
+See [Configure the CLI backend](docs/readthedocs/how-to/configure-cli-backend.md).
+
+### Wrapper modes
+
+Use the saved default backend:
+
+```console
+li list
+li create https://example.com --title Example
+```
+
+Force local SQLite for one command:
+
+```console
+lilocal list --query reference
+```
+
+Force the configured API for one command:
+
+```console
+liapi list
+liapi import-file /path/to/bookmarks.html
+```
+
+Control the local Docker stack:
+
+```console
+liserverstart
+liserverstatus
+liserverstop
+```
+
+Wrapper quirks:
+
+- The installer supports Unix-like systems and writes to `~/.local/scripts`.
+- Add `~/.local/scripts` to `PATH` when your shell does not include it.
+- `li` uses the saved backend. `lilocal` and `liapi` override it for one command.
+- `liapi` requires a saved or environment-provided API URL and API key.
+- Server wrappers keep the absolute source checkout path. Run setup again after you move the checkout.
+- `liserverstop` keeps the Docker data volume.
+- Server wrappers do not change the saved CLI backend.
+
 ## CLI usage
 
 ### Manage bookmarks
@@ -44,6 +94,8 @@ link-hoarder delete 1
 ```
 
 Use repeated `--tag` options to add multiple tags.
+The default backend is local SQLite.
+Use `link-hoarder --backend api COMMAND` to override the backend for one command.
 
 ### Import native profiles
 
@@ -120,6 +172,7 @@ See the [API reference](docs/readthedocs/reference/api.md) and committed [`docs/
 
 - [Quick start](docs/readthedocs/tutorials/quick-start.md)
 - [CLI reference](docs/readthedocs/reference/cli.md)
+- [CLI backend guide](docs/readthedocs/how-to/configure-cli-backend.md)
 - [Import guide](docs/readthedocs/how-to/import-browser-profiles.md)
 - [Configuration reference](docs/readthedocs/reference/configuration.md)
 - [Architecture](docs/readthedocs/explanation/architecture.md)
@@ -132,8 +185,11 @@ Run `link-hoarder COMMAND --help` for command details. Unix users can also read 
 mise run install
 mise run hooks
 mise run check
+mise run docs-build
 ```
 
+Use `mise run docs-serve` for a local documentation preview.
+See [Publish on Read the Docs](docs/readthedocs/how-to/publish-read-the-docs.md) for hosted builds.
 Run `mise tasks` to list all project actions.
 
 ## Release

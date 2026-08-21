@@ -4,6 +4,7 @@
 
 ### Added
 
+- Add interchangeable local and API CLI backends with interactive user setup (cli-backend-selection, ADR-0002).
 - Support JavaScript bookmarklets in the CLI, API, and browser imports (core-bookmarklet-support).
 - Automatically tag JavaScript bookmarklets and search bookmark tags (core-bookmarklet-tags).
 - Add a Vue web interface with an auto-provisioned Docker stack (infra-web-interface).
@@ -15,6 +16,7 @@
 
 ### Changed
 
+- Build and publish complete Diataxis documentation (docs-diataxis-site).
 - Add a versioned API contract, pagination, duplicate protection, and profile uploads (api-contract-v1).
 - Apply Twelve-Factor runtime practices and document SQLite scaling exceptions (infra-twelve-factor).
 - Add containers, tasks, official library skills, and release workflows (infra-stack-release, ADR-0001).

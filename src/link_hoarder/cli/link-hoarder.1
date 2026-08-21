@@ -3,10 +3,11 @@
 link-hoarder \- manage bookmarks and import browser data
 .SH SYNOPSIS
 .B link-hoarder
+.RI [ --backend " local|api" ]
 .I COMMAND
 .RI [ OPTIONS ]
 .SH DESCRIPTION
-Link Hoarder stores bookmarks in SQLite. Commands return bookmark data as JSON. Bookmark URLs can use HTTP, HTTPS, or javascript: schemes. Link Hoarder stores bookmarklets but does not execute them.
+Link Hoarder stores bookmarks in local SQLite or through an HTTP API. Commands return bookmark data as JSON. Bookmark URLs can use HTTP, HTTPS, or javascript: schemes. Link Hoarder stores bookmarklets but does not execute them.
 .SH COMMANDS
 .TP
 .B create URL --title TITLE
@@ -30,15 +31,27 @@ Import chrome, chromium, edge, or firefox profile data. Omit --profile to discov
 .B import-file FILE
 Import a Netscape bookmark HTML export.
 .TP
+.B config
+Show saved backend configuration without secrets.
+.TP
 .B api [--host HOST] [--port PORT]
 Run the FastAPI server. Set LINK_HOARDER_API_KEY first.
 .SH ENVIRONMENT
 .TP
-.B LINK_HOARDER_DATABASE_PATH
-SQLite database path. The default uses the platform-native user data directory.
+.B LINK_HOARDER_BACKEND
+CLI backend. Use local or api.
+.TP
+.B LINK_HOARDER_API_URL
+API server root URL. Do not include /api/v1.
 .TP
 .B LINK_HOARDER_API_KEY
-API key required by the server in the X-API-Key request header.
+API key used by API clients and the server.
+.TP
+.B LINK_HOARDER_API_TIMEOUT_SECONDS
+CLI HTTP timeout in seconds. The default is 10.
+.TP
+.B LINK_HOARDER_DATABASE_PATH
+SQLite database path. The default uses the platform-native user data directory.
 .TP
 .B LINK_HOARDER_LOG_LEVEL
 Structured log level. The default is INFO.
@@ -47,7 +60,7 @@ Structured log level. The default is INFO.
 .I docs/readthedocs/reference/configuration.md
 Complete configuration reference.
 .SH EXIT STATUS
-Zero indicates success. One indicates a missing bookmark. Two indicates missing server configuration.
+Zero indicates success. One indicates a missing bookmark. Two indicates invalid backend or server configuration.
 .SH SEE ALSO
 .BR uvx (1),
 .BR docker-compose (1)
