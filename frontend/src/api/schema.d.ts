@@ -41,23 +41,6 @@ export interface paths {
         patch: operations["update_bookmark_api_v1_bookmarks__bookmark_id__patch"];
         trace?: never;
     };
-    "/api/v1/imports/browser": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Import Browser */
-        post: operations["import_browser_api_v1_imports_browser_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/imports/browser-file": {
         parameters: {
             query?: never;
@@ -203,15 +186,6 @@ export interface components {
              * @default ok
              */
             status: string;
-        };
-        /**
-         * ImportRequest
-         * @description Native browser import request.
-         */
-        ImportRequest: {
-            browser: components["schemas"]["Browser"];
-            /** Profile */
-            profile?: string | null;
         };
         /**
          * ImportResult
@@ -435,39 +409,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorDetail"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    import_browser_api_v1_imports_browser_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ImportRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ImportResult"];
                 };
             };
             /** @description Validation Error */

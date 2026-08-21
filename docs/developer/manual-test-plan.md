@@ -62,7 +62,7 @@ Set an API key and use a separate database.
 Linux or macOS:
 
 ```console
-export LINK_HOARDER_API_KEY=test-secret
+export LINK_HOARDER_API_KEY=test-secret-with-at-least-32-characters
 export LINK_HOARDER_DATABASE_PATH="$PWD/.manual-api.db"
 uv run link-hoarder api
 ```
@@ -70,20 +70,21 @@ uv run link-hoarder api
 Windows PowerShell:
 
 ```powershell
-$env:LINK_HOARDER_API_KEY = "test-secret"
+$env:LINK_HOARDER_API_KEY = "test-secret-with-at-least-32-characters"
 $env:LINK_HOARDER_DATABASE_PATH = "$PWD\.manual-api.db"
 uv run link-hoarder api
 ```
 
-Open `http://127.0.0.1:8000/docs`.
+Use `docs/openapi.json` with an HTTP client.
 
-Test these cases in Swagger UI:
+Test these cases:
 
 1. Call `/health` without a key. Confirm HTTP 401.
-2. Authorize with `test-secret`.
+2. Send the key in `X-API-Key`. Confirm HTTP 200.
 3. Create a bookmark with `/api/v1/bookmarks`.
 4. List, update, and delete the bookmark.
-5. Call `/api/v1/imports/browser` with a missing profile. Confirm HTTP 422.
+5. Upload an invalid browser file. Confirm a structured import warning.
+6. Confirm that `/docs` and `/openapi.json` return HTTP 404.
 
 ## 5. Build the package
 

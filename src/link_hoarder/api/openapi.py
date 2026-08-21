@@ -18,7 +18,7 @@ def contract_json() -> str:
         app = create_app(
             Settings(
                 database_path=Path(temporary) / "contract.db",
-                api_key=SecretStr("contract-key"),
+                api_key=SecretStr("contract-key-value-with-32-characters"),
             )
         )
         return f"{json.dumps(app.openapi(), indent=2, sort_keys=True)}\n"

@@ -21,3 +21,4 @@
 ### Fixed
 
 - Report browser import failures through the CLI, API, and web interface (import-warning-reporting).
+- Harden API authentication, uploads, error responses, proxy limits, and browser headers (api-security-hardening).

@@ -1,8 +1,8 @@
 """Authenticated FastAPI application."""
 
 import secrets
-import sqlite3
 import tempfile
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Annotated
 
@@ -13,12 +13,15 @@ from fastapi import (
     FastAPI,
     HTTPException,
     Query,
+    Request,
     Response,
     Security,
     status,
 )
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from fastapi.security import APIKeyHeader
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel
 
 from link_hoarder.core.config import Settings
 from link_hoarder.core.importers import import_profiles
@@ -29,13 +32,13 @@ from link_hoarder.core.models import (
     BookmarkRead,
     BookmarkUpdate,
     Browser,
-    ImportRequest,
     ImportResult,
 )
 from link_hoarder.core.repository import BookmarkRepository, DuplicateBookmarkError
 
 _API_KEY = APIKeyHeader(name="X-API-Key", auto_error=False)
 _API_PREFIX = "/api/v1"
+_MAX_PROFILE_BYTES = 16 * 1024 * 1024
 
 
 class Health(BaseModel):
@@ -65,11 +68,44 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="A valid API key is required.",
+                headers={"WWW-Authenticate": "APIKey"},
             )
 
     authorized = [Depends(require_api_key)]
-    api = FastAPI(title="Link Hoarder API", version="0.1.0")
+    api = FastAPI(
+        title="Link Hoarder API",
+        version="0.1.0",
+        docs_url=None,
+        redoc_url=None,
+        openapi_url=None,
+    )
     router = APIRouter(prefix=_API_PREFIX, dependencies=authorized)
+
+    @api.exception_handler(RequestValidationError)
+    def validation_error(
+        request: Request, error: RequestValidationError
+    ) -> JSONResponse:
+        del request
+        details = [
+            {key: value for key, value in item.items() if key in {"loc", "msg", "type"}}
+            for item in error.errors()
+        ]
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            content={"detail": details},
+        )
+
+    @api.middleware("http")
+    async def security_headers(
+        request: Request,
+        call_next: Callable[[Request], Awaitable[Response]],
+    ) -> Response:
+        response = await call_next(request)
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        return response
 
     @api.get("/health", dependencies=authorized, tags=["system"])
     def health() -> Health:
@@ -86,7 +122,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         try:
             return repository.create(bookmark)
         except DuplicateBookmarkError as error:
-            raise _duplicate(error.url) from error
+            raise _duplicate() from error
 
     @router.get("/bookmarks", tags=["bookmarks"])
     def list_bookmarks(
@@ -117,7 +153,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         try:
             bookmark = repository.update(bookmark_id, update)
         except DuplicateBookmarkError as error:
-            raise _duplicate(error.url) from error
+            raise _duplicate() from error
         if bookmark is None:
             raise _not_found(bookmark_id)
         return bookmark
@@ -132,40 +168,28 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise _not_found(bookmark_id)
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
-    @router.post("/imports/browser", tags=["imports"])
-    def import_browser(request: ImportRequest) -> ImportResult:
-        profile = Path(request.profile) if request.profile else None
-        if profile is not None and not profile.is_file():
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail="The browser profile file does not exist.",
-            )
-        return import_profiles(repository, request.browser, profile)
-
     @router.post("/imports/browser-file", tags=["imports"])
     def import_browser_file(
         browser: Annotated[Browser, Query()],
         content: Annotated[
             bytes,
-            Body(media_type="application/octet-stream", min_length=1),
+            Body(
+                media_type="application/octet-stream",
+                min_length=1,
+                max_length=_MAX_PROFILE_BYTES,
+            ),
         ],
     ) -> ImportResult:
         filename = "places.sqlite" if browser is Browser.FIREFOX else "Bookmarks"
         with tempfile.TemporaryDirectory() as temporary:
             profile = Path(temporary) / filename
             profile.write_bytes(content)
-            try:
-                return import_profiles(repository, browser, profile)
-            except (
-                OSError,
-                UnicodeError,
-                ValidationError,
-                sqlite3.DatabaseError,
-            ) as error:
-                raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                    detail="The uploaded browser profile is not valid.",
-                ) from error
+            result = import_profiles(repository, browser, profile)
+            warnings = [
+                warning.model_copy(update={"profile": filename})
+                for warning in result.warnings
+            ]
+            return result.model_copy(update={"warnings": warnings})
 
     api.include_router(router)
     return api
@@ -178,8 +202,8 @@ def _not_found(bookmark_id: int) -> HTTPException:
     )
 
 
-def _duplicate(url: str) -> HTTPException:
+def _duplicate() -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_409_CONFLICT,
-        detail=f"A bookmark already uses URL {url}.",
+        detail="A bookmark already uses this URL.",
     )

@@ -3,21 +3,23 @@
 import json
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
-from pydantic import SecretStr
+from pydantic import SecretStr, ValidationError
 
 from link_hoarder.api.app import create_app
 from link_hoarder.api.openapi import contract_json
 from link_hoarder.core.config import Settings
 
 _API_PREFIX = "/api/v1"
-_HEADERS = {"X-API-Key": "test-key"}
+_API_KEY_VALUE = "test-key-value-with-at-least-32-characters"
+_HEADERS = {"X-API-Key": _API_KEY_VALUE}
 
 
 def _client(tmp_path: Path) -> TestClient:
     settings = Settings(
         database_path=tmp_path / "api.db",
-        api_key=SecretStr("test-key"),
+        api_key=SecretStr(_API_KEY_VALUE),
     )
     return TestClient(create_app(settings))
 
@@ -27,11 +29,28 @@ def test_openapi_contract_is_current() -> None:
     assert Path("docs/openapi.json").read_text(encoding="utf-8") == contract_json()
 
 
+def test_settings_reject_short_api_key() -> None:
+    """Given a short API key, settings reject insecure authentication data."""
+    with pytest.raises(ValidationError):
+        Settings(api_key=SecretStr("short-key"))
+
+
 def test_api_requires_key(tmp_path: Path) -> None:
     """Given no API key header, the API rejects the request."""
     response = _client(tmp_path).get("/health")
 
     assert response.status_code == 401
+    assert response.headers["www-authenticate"] == "APIKey"
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["x-content-type-options"] == "nosniff"
+
+
+def test_api_hides_runtime_documentation(tmp_path: Path) -> None:
+    """Given an authenticated request, runtime API schemas remain disabled."""
+    client = _client(tmp_path)
+
+    assert client.get("/docs", headers=_HEADERS).status_code == 404
+    assert client.get("/openapi.json", headers=_HEADERS).status_code == 404
 
 
 def test_api_crud(tmp_path: Path) -> None:
@@ -114,6 +133,7 @@ def test_api_rejects_duplicate_normalized_url(tmp_path: Path) -> None:
     )
 
     assert second.status_code == 409
+    assert "https://example.com" not in second.text
     assert updated.status_code == 409
 
 
@@ -170,14 +190,40 @@ def test_api_warns_for_invalid_uploaded_profile(tmp_path: Path) -> None:
 
     assert response.status_code == 200
     assert response.json()["warnings"][0]["code"] == "profile_invalid"
+    assert response.json()["warnings"][0]["profile"] == "Bookmarks"
+    assert str(tmp_path) not in response.text
 
 
-def test_api_import_rejects_missing_profile(tmp_path: Path) -> None:
-    """Given a missing profile file, the API returns a validation response."""
+def test_api_rejects_server_path_imports(tmp_path: Path) -> None:
+    """Given a server path import request, the API does not expose that route."""
     response = _client(tmp_path).post(
         f"{_API_PREFIX}/imports/browser",
         headers=_HEADERS,
-        json={"browser": "firefox", "profile": str(tmp_path / "missing.sqlite")},
+        json={"browser": "firefox", "profile": "/etc/passwd"},
+    )
+
+    assert response.status_code == 404
+
+
+def test_api_rejects_oversized_profile(tmp_path: Path) -> None:
+    """Given a profile over 16 MiB, the API rejects the request body."""
+    response = _client(tmp_path).post(
+        f"{_API_PREFIX}/imports/browser-file",
+        headers={**_HEADERS, "Content-Type": "application/octet-stream"},
+        params={"browser": "chrome"},
+        content=b"x" * (16 * 1024 * 1024 + 1),
     )
 
     assert response.status_code == 422
+
+
+def test_api_does_not_echo_invalid_input(tmp_path: Path) -> None:
+    """Given invalid secret input, validation omits the rejected value."""
+    response = _client(tmp_path).post(
+        f"{_API_PREFIX}/bookmarks",
+        headers=_HEADERS,
+        json={"url": "sensitive-invalid-value", "title": "Invalid"},
+    )
+
+    assert response.status_code == 422
+    assert "sensitive-invalid-value" not in response.text

@@ -34,7 +34,7 @@ Set `LINK_HOARDER_API_KEY`. Then start the server.
 link-hoarder api
 ```
 
-Send the key in the `X-API-Key` header. Open `http://127.0.0.1:8000/docs` for the OpenAPI interface.
+Send the key in the `X-API-Key` header. See the committed `docs/openapi.json` contract.
 
 ## Run the Docker stack
 

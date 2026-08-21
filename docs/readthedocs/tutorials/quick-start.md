@@ -20,15 +20,15 @@ link-hoarder list
 Set an API key before you start the server.
 
 ```console
-export LINK_HOARDER_API_KEY="replace-this-secret"
+export LINK_HOARDER_API_KEY="replace-this-with-at-least-32-characters"
 link-hoarder api
 ```
 
 On PowerShell, use this command:
 
 ```powershell
-$env:LINK_HOARDER_API_KEY = "replace-this-secret"
+$env:LINK_HOARDER_API_KEY = "replace-this-with-at-least-32-characters"
 link-hoarder api
 ```
 
-Open `http://127.0.0.1:8000/docs`. Select **Authorize** and enter the API key.
+Use the committed `docs/openapi.json` contract to call the API.

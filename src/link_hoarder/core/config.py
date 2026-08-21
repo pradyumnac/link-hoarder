@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from platformdirs import user_data_path
-from pydantic import SecretStr
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     )
 
     database_path: Path = default_database_path()
-    api_key: SecretStr | None = None
+    api_key: SecretStr | None = Field(default=None, min_length=32)
     log_level: str = "INFO"
     host: str = "127.0.0.1"
     port: int = 8000

@@ -1,7 +1,8 @@
 # HTTP API reference
 
-Send `X-API-Key` with every request. Open `/docs` for the generated OpenAPI interface.
+Send `X-API-Key` with every request. The key must contain at least 32 characters.
 The committed contract is in [`docs/openapi.json`](../../openapi.json).
+Runtime documentation routes are disabled.
 
 Resource routes use the `/api/v1` prefix. The `/health` route is not versioned.
 
@@ -13,7 +14,6 @@ Resource routes use the `/api/v1` prefix. The `/health` route is not versioned.
 | `GET` | `/api/v1/bookmarks/{id}` | Get one bookmark. |
 | `PATCH` | `/api/v1/bookmarks/{id}` | Update supplied fields. |
 | `DELETE` | `/api/v1/bookmarks/{id}` | Delete one bookmark. |
-| `POST` | `/api/v1/imports/browser` | Import a server-local browser profile. |
 | `POST` | `/api/v1/imports/browser-file` | Import an uploaded browser profile. |
 
 The list response contains `items`, `total`, `limit`, and `offset` fields.
@@ -23,4 +23,5 @@ The import response includes structured warnings for invalid entries, unreadable
 profiles, malformed files, and storage failures. Valid entries continue to import.
 
 Send uploaded profile bytes as `application/octet-stream`. Set the `browser` query
-parameter to `chrome`, `chromium`, `edge`, or `firefox`.
+parameter to `chrome`, `chromium`, `edge`, or `firefox`. The maximum file size is
+16 MiB. The API does not accept server-local profile paths.

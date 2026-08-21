@@ -263,30 +263,6 @@
         "title": "Health",
         "type": "object"
       },
-      "ImportRequest": {
-        "description": "Native browser import request.",
-        "properties": {
-          "browser": {
-            "$ref": "#/components/schemas/Browser"
-          },
-          "profile": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Profile"
-          }
-        },
-        "required": [
-          "browser"
-        ],
-        "title": "ImportRequest",
-        "type": "object"
-      },
       "ImportResult": {
         "description": "Browser import result.",
         "properties": {
@@ -697,52 +673,6 @@
         ]
       }
     },
-    "/api/v1/imports/browser": {
-      "post": {
-        "operationId": "import_browser_api_v1_imports_browser_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ImportRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ImportResult"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "APIKeyHeader": []
-          }
-        ],
-        "summary": "Import Browser",
-        "tags": [
-          "imports"
-        ]
-      }
-    },
     "/api/v1/imports/browser-file": {
       "post": {
         "operationId": "import_browser_file_api_v1_imports_browser_file_post",
@@ -761,6 +691,7 @@
             "application/octet-stream": {
               "schema": {
                 "contentMediaType": "application/octet-stream",
+                "maxLength": 16777216,
                 "minLength": 1,
                 "title": "Content",
                 "type": "string"

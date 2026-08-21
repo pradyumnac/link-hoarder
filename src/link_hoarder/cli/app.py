@@ -166,7 +166,11 @@ def run_api(
         raise typer.Exit(2)
     configure_logging(settings.log_level)
     uvicorn.run(
-        create_app(settings), host=host or settings.host, port=port or settings.port
+        create_app(settings),
+        host=host or settings.host,
+        port=port or settings.port,
+        date_header=False,
+        server_header=False,
     )
 
 

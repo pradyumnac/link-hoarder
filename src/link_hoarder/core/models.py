@@ -129,13 +129,6 @@ class ImportWarning(SQLModel):
     profile: str
 
 
-class ImportRequest(SQLModel):
-    """Native browser import request."""
-
-    browser: Browser
-    profile: str | None = None
-
-
 class ImportResult(SQLModel):
     """Browser import result."""
 
