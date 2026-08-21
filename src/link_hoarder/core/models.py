@@ -112,6 +112,23 @@ class BookmarkPage(SQLModel):
     offset: int
 
 
+class ImportWarningCode(StrEnum):
+    """Browser import warning category."""
+
+    BOOKMARK_INVALID = "bookmark_invalid"
+    BOOKMARK_STORE_FAILED = "bookmark_store_failed"
+    PROFILE_INVALID = "profile_invalid"
+    PROFILE_UNREADABLE = "profile_unreadable"
+
+
+class ImportWarning(SQLModel):
+    """One browser import failure that did not stop the full import."""
+
+    code: ImportWarningCode
+    message: str
+    profile: str
+
+
 class ImportRequest(SQLModel):
     """Native browser import request."""
 
@@ -127,3 +144,4 @@ class ImportResult(SQLModel):
     discovered: int
     imported: int
     skipped: int
+    warnings: list[ImportWarning] = Field(default_factory=list)

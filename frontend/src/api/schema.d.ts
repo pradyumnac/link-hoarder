@@ -227,7 +227,26 @@ export interface components {
             profiles: number;
             /** Skipped */
             skipped: number;
+            /** Warnings */
+            warnings?: components["schemas"]["ImportWarning"][];
         };
+        /**
+         * ImportWarning
+         * @description One browser import failure that did not stop the full import.
+         */
+        ImportWarning: {
+            code: components["schemas"]["ImportWarningCode"];
+            /** Message */
+            message: string;
+            /** Profile */
+            profile: string;
+        };
+        /**
+         * ImportWarningCode
+         * @description Browser import warning category.
+         * @enum {string}
+         */
+        ImportWarningCode: "bookmark_invalid" | "bookmark_store_failed" | "profile_invalid" | "profile_unreadable";
         /** ValidationError */
         ValidationError: {
             /** Context */

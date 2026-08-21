@@ -6,9 +6,10 @@ from pathlib import Path
 
 import pytest
 
+from link_hoarder.core import importers
 from link_hoarder.core.importers import discover_profiles, import_profiles, read_profile
-from link_hoarder.core.models import Browser
-from link_hoarder.core.repository import BookmarkRepository
+from link_hoarder.core.models import BookmarkCreate, BookmarkRead, Browser
+from link_hoarder.core.repository import BookmarkRepository, BookmarkStorageError
 
 
 @pytest.mark.parametrize(
@@ -64,11 +65,12 @@ def test_read_chromium_nested_bookmark(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    bookmarks = read_profile(Browser.CHROME, profile)
+    result = read_profile(Browser.CHROME, profile)
 
-    assert len(bookmarks) == 1
-    assert bookmarks[0].folder == "Bookmarks bar/Python"
-    assert bookmarks[0].url == "https://python.org/"
+    assert len(result.bookmarks) == 1
+    assert result.bookmarks[0].folder == "Bookmarks bar/Python"
+    assert result.bookmarks[0].url == "https://python.org/"
+    assert result.warnings == []
 
 
 def test_read_chromium_imports_bookmarklet(tmp_path: Path) -> None:
@@ -90,6 +92,11 @@ def test_read_chromium_imports_bookmarklet(tmp_path: Path) -> None:
                                 "type": "url",
                                 "url": "https://example.com",
                             },
+                            {
+                                "name": "Unsupported",
+                                "type": "url",
+                                "url": "ftp://example.com",
+                            },
                         ]
                     }
                 }
@@ -98,14 +105,16 @@ def test_read_chromium_imports_bookmarklet(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    bookmarks = read_profile(Browser.CHROME, profile)
+    result = read_profile(Browser.CHROME, profile)
 
-    assert [bookmark.url for bookmark in bookmarks] == [
+    assert [bookmark.url for bookmark in result.bookmarks] == [
         "javascript:alert('unsupported')",
         "https://example.com/",
     ]
-    assert bookmarks[0].tags == ["bookmarklet"]
-    assert bookmarks[1].tags == []
+    assert result.bookmarks[0].tags == ["bookmarklet"]
+    assert result.bookmarks[1].tags == []
+    assert result.discovered == 3
+    assert result.warnings[0].code == "bookmark_invalid"
 
 
 def test_read_firefox_bookmark(tmp_path: Path) -> None:
@@ -124,11 +133,11 @@ def test_read_firefox_bookmark(tmp_path: Path) -> None:
             """
         )
 
-    bookmarks = read_profile(Browser.FIREFOX, profile)
+    result = read_profile(Browser.FIREFOX, profile)
 
-    assert len(bookmarks) == 1
-    assert bookmarks[0].title == "Example"
-    assert bookmarks[0].folder == "Toolbar"
+    assert len(result.bookmarks) == 1
+    assert result.bookmarks[0].title == "Example"
+    assert result.bookmarks[0].folder == "Toolbar"
 
 
 def test_import_skips_existing_url(
@@ -161,3 +170,82 @@ def test_import_skips_existing_url(
     assert first.imported == 1
     assert second.imported == 0
     assert second.skipped == 1
+
+
+def test_import_warns_for_malformed_profile(
+    tmp_path: Path, repository: BookmarkRepository
+) -> None:
+    """Given malformed profile data, import returns a profile warning."""
+    profile = tmp_path / "Bookmarks"
+    profile.write_text("not-json", encoding="utf-8")
+
+    result = import_profiles(repository, Browser.CHROME, profile)
+
+    assert result.imported == 0
+    assert result.warnings[0].code == "profile_invalid"
+
+
+def test_import_warns_for_unreadable_profile(
+    tmp_path: Path,
+    repository: BookmarkRepository,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Given an unreadable profile, import returns a profile warning."""
+    profile = tmp_path / "Bookmarks"
+
+    def fail_read(browser: Browser, path: Path) -> importers.ProfileReadResult:
+        raise PermissionError(path)
+
+    monkeypatch.setattr(importers, "read_profile", fail_read)
+
+    result = import_profiles(repository, Browser.CHROME, profile)
+
+    assert result.imported == 0
+    assert result.warnings[0].code == "profile_unreadable"
+
+
+def test_import_continues_after_storage_failure(
+    tmp_path: Path,
+    repository: BookmarkRepository,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Given one storage failure, import warns and stores later bookmarks."""
+    profile = tmp_path / "Bookmarks"
+    profile.write_text(
+        json.dumps(
+            {
+                "roots": {
+                    "other": {
+                        "children": [
+                            {
+                                "name": "Fail",
+                                "type": "url",
+                                "url": "https://fail.example",
+                            },
+                            {
+                                "name": "Keep",
+                                "type": "url",
+                                "url": "https://keep.example",
+                            },
+                        ]
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    original_create = repository.create
+
+    def fail_one(bookmark: BookmarkCreate) -> BookmarkRead:
+        if bookmark.url == "https://fail.example/":
+            raise BookmarkStorageError("storage unavailable")
+        return original_create(bookmark)
+
+    monkeypatch.setattr(repository, "create", fail_one)
+
+    result = import_profiles(repository, Browser.CHROME, profile)
+
+    assert result.imported == 1
+    assert result.discovered == 2
+    assert result.warnings[0].code == "bookmark_store_failed"
+    assert repository.find_by_url("https://keep.example/") is not None

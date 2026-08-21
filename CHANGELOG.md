@@ -19,3 +19,5 @@
 - Verify core, CLI, API, and packaging flows (test-release-gates, ADR-0001).
 
 ### Fixed
+
+- Report browser import failures through the CLI, API, and web interface (import-warning-reporting).

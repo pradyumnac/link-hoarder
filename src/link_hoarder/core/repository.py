@@ -7,7 +7,7 @@ from pathlib import Path
 
 from sqlalchemy import String, cast, func
 from sqlalchemy.engine import Engine
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.pool import NullPool
 from sqlmodel import Session, SQLModel, col, create_engine, select
 
@@ -17,6 +17,10 @@ from link_hoarder.core.models import (
     BookmarkRecord,
     BookmarkUpdate,
 )
+
+
+class BookmarkStorageError(Exception):
+    """The bookmark repository could not complete a write."""
 
 
 class DuplicateBookmarkError(Exception):
@@ -74,6 +78,11 @@ class BookmarkRepository:
             except IntegrityError as error:
                 session.rollback()
                 raise DuplicateBookmarkError(bookmark.url) from error
+            except SQLAlchemyError as error:
+                session.rollback()
+                raise BookmarkStorageError(
+                    "The bookmark could not be stored."
+                ) from error
             session.refresh(record)
             return self._read(record)
 
@@ -146,6 +155,11 @@ class BookmarkRepository:
                 session.rollback()
                 duplicate_url = update.url or record.url
                 raise DuplicateBookmarkError(duplicate_url) from error
+            except SQLAlchemyError as error:
+                session.rollback()
+                raise BookmarkStorageError(
+                    "The bookmark could not be updated."
+                ) from error
             session.refresh(record)
             return self._read(record)
 

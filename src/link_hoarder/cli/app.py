@@ -144,6 +144,11 @@ def import_browser(
     """Import native browser profile bookmarks."""
     settings = Settings()
     result = import_profiles(_repository(settings), browser, profile)
+    for warning in result.warnings:
+        typer.echo(
+            f"Warning [{warning.code.value}] {warning.profile}: {warning.message}",
+            err=True,
+        )
     typer.echo(result.model_dump_json(indent=2))
 
 

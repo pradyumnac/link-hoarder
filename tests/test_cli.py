@@ -59,7 +59,12 @@ def test_cli_update_delete_and_import(
                                 "name": "Imported",
                                 "type": "url",
                                 "url": "https://example.com",
-                            }
+                            },
+                            {
+                                "name": "Invalid",
+                                "type": "url",
+                                "url": "ftp://example.com",
+                            },
                         ]
                     }
                 }
@@ -75,6 +80,8 @@ def test_cli_update_delete_and_import(
     deleted = runner.invoke(app, ["delete", "1"])
 
     assert json.loads(imported.stdout)["imported"] == 1
+    assert json.loads(imported.stdout)["warnings"][0]["code"] == "bookmark_invalid"
+    assert "Warning [bookmark_invalid]" in imported.stderr
     assert json.loads(updated.stdout)["title"] == "Updated"
     assert deleted.exit_code == 0
 

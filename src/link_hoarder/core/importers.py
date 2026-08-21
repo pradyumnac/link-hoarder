@@ -8,6 +8,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import cast
 
+import structlog
 from pydantic import BaseModel, Field, ValidationError
 
 from link_hoarder.core.models import (
@@ -15,8 +16,16 @@ from link_hoarder.core.models import (
     BookmarkSource,
     Browser,
     ImportResult,
+    ImportWarning,
+    ImportWarningCode,
 )
-from link_hoarder.core.repository import BookmarkRepository, DuplicateBookmarkError
+from link_hoarder.core.repository import (
+    BookmarkRepository,
+    BookmarkStorageError,
+    DuplicateBookmarkError,
+)
+
+logger = structlog.get_logger(__name__)
 
 
 class ChromeNode(BaseModel):
@@ -33,6 +42,14 @@ class ChromeFile(BaseModel):
     """Validated Chromium bookmarks file."""
 
     roots: dict[str, ChromeNode]
+
+
+class ProfileReadResult(BaseModel):
+    """Validated bookmarks and warnings from one browser profile."""
+
+    bookmarks: list[BookmarkCreate] = Field(default_factory=list)
+    discovered: int = 0
+    warnings: list[ImportWarning] = Field(default_factory=list)
 
 
 def discover_profiles(browser: Browser) -> list[Path]:
@@ -67,8 +84,8 @@ def discover_profiles(browser: Browser) -> list[Path]:
     return sorted(found)
 
 
-def read_profile(browser: Browser, path: Path) -> list[BookmarkCreate]:
-    """Read bookmarks from one browser data file."""
+def read_profile(browser: Browser, path: Path) -> ProfileReadResult:
+    """Read bookmarks and entry warnings from one browser data file."""
     if browser is Browser.FIREFOX:
         return _read_firefox(path)
     return _read_chromium(browser, path)
@@ -79,15 +96,47 @@ def import_profiles(
     browser: Browser,
     profile: Path | None = None,
 ) -> ImportResult:
-    """Import new URLs from native browser profiles."""
+    """Import new URLs and report failures from native browser profiles."""
     profiles = [profile] if profile is not None else discover_profiles(browser)
     discovered = 0
     imported = 0
     skipped = 0
+    warnings: list[ImportWarning] = []
     for current in profiles:
-        bookmarks = read_profile(browser, current)
-        discovered += len(bookmarks)
-        for bookmark in bookmarks:
+        try:
+            profile_result = read_profile(browser, current)
+        except OSError as error:
+            logger.warning(
+                "browser_profile_unreadable",
+                profile=str(current),
+                error_type=type(error).__name__,
+            )
+            warnings.append(
+                _warning(
+                    ImportWarningCode.PROFILE_UNREADABLE,
+                    "The browser profile could not be read.",
+                    current,
+                )
+            )
+            continue
+        except (UnicodeError, ValidationError, sqlite3.DatabaseError) as error:
+            logger.warning(
+                "browser_profile_invalid",
+                profile=str(current),
+                error_type=type(error).__name__,
+            )
+            warnings.append(
+                _warning(
+                    ImportWarningCode.PROFILE_INVALID,
+                    "The browser profile format is invalid.",
+                    current,
+                )
+            )
+            continue
+
+        discovered += profile_result.discovered
+        warnings.extend(profile_result.warnings)
+        for bookmark in profile_result.bookmarks:
             if repository.find_by_url(bookmark.url) is not None:
                 skipped += 1
                 continue
@@ -96,6 +145,21 @@ def import_profiles(
             except DuplicateBookmarkError:
                 skipped += 1
                 continue
+            except BookmarkStorageError as error:
+                logger.warning(
+                    "bookmark_import_store_failed",
+                    profile=str(current),
+                    title=_short_title(bookmark.title),
+                    error_type=type(error).__name__,
+                )
+                warnings.append(
+                    _warning(
+                        ImportWarningCode.BOOKMARK_STORE_FAILED,
+                        f"The bookmark '{_short_title(bookmark.title)}' could not be stored.",
+                        current,
+                    )
+                )
+                continue
             imported += 1
     return ImportResult(
         browser=browser,
@@ -103,24 +167,28 @@ def import_profiles(
         discovered=discovered,
         imported=imported,
         skipped=skipped,
+        warnings=warnings,
     )
 
 
-def _read_chromium(browser: Browser, path: Path) -> list[BookmarkCreate]:
+def _read_chromium(browser: Browser, path: Path) -> ProfileReadResult:
     data = ChromeFile.model_validate_json(path.read_text(encoding="utf-8"))
     source = BookmarkSource(browser.value)
-    bookmarks: list[BookmarkCreate] = []
+    result = ProfileReadResult()
     for root in data.roots.values():
-        bookmarks.extend(_walk_chrome(root, source, ()))
-    return bookmarks
+        _walk_chrome(root, source, (), path, result)
+    return result
 
 
 def _walk_chrome(
     node: ChromeNode,
     source: BookmarkSource,
     parents: tuple[str, ...],
-) -> list[BookmarkCreate]:
+    profile: Path,
+    result: ProfileReadResult,
+) -> None:
     if node.type == "url" and node.url:
+        result.discovered += 1
         folder = "/".join(parents) or None
         try:
             bookmark = BookmarkCreate(
@@ -130,17 +198,22 @@ def _walk_chrome(
                 source=source,
             )
         except ValidationError:
-            return []
-        return [bookmark]
+            result.warnings.append(
+                _warning(
+                    ImportWarningCode.BOOKMARK_INVALID,
+                    f"The bookmark '{_short_title(node.name)}' is invalid.",
+                    profile,
+                )
+            )
+            return
+        result.bookmarks.append(bookmark)
+        return
     next_parents = (*parents, node.name) if node.name else parents
-    return [
-        bookmark
-        for child in node.children
-        for bookmark in _walk_chrome(child, source, next_parents)
-    ]
+    for child in node.children:
+        _walk_chrome(child, source, next_parents, profile, result)
 
 
-def _read_firefox(path: Path) -> list[BookmarkCreate]:
+def _read_firefox(path: Path) -> ProfileReadResult:
     with tempfile.TemporaryDirectory() as temporary:
         copied = Path(temporary) / "places.sqlite"
         shutil.copy2(path, copied)
@@ -154,19 +227,41 @@ def _read_firefox(path: Path) -> list[BookmarkCreate]:
                 FROM moz_bookmarks AS b
                 JOIN moz_places AS p ON p.id = b.fk
                 LEFT JOIN moz_bookmarks AS f ON f.id = b.parent
-                WHERE b.type = 1 AND p.url LIKE 'http%'
+                WHERE b.type = 1
                 ORDER BY b.id
                 """
             ).fetchall()
-    return [
-        BookmarkCreate(
-            url=cast(str, row[0]),
-            title=cast(str, row[1]),
-            folder=cast(str | None, row[2]),
-            source=BookmarkSource.FIREFOX,
-        )
-        for row in rows
-    ]
+
+    result = ProfileReadResult(discovered=len(rows))
+    for row in rows:
+        title = cast(str, row[1])
+        try:
+            bookmark = BookmarkCreate(
+                url=cast(str, row[0]),
+                title=title,
+                folder=cast(str | None, row[2]),
+                source=BookmarkSource.FIREFOX,
+            )
+        except ValidationError:
+            result.warnings.append(
+                _warning(
+                    ImportWarningCode.BOOKMARK_INVALID,
+                    f"The bookmark '{_short_title(title)}' is invalid.",
+                    path,
+                )
+            )
+            continue
+        result.bookmarks.append(bookmark)
+    return result
+
+
+def _warning(code: ImportWarningCode, message: str, profile: Path) -> ImportWarning:
+    return ImportWarning(code=code, message=message, profile=str(profile))
+
+
+def _short_title(title: str) -> str:
+    cleaned = title.strip() or "Untitled"
+    return f"{cleaned[:77]}..." if len(cleaned) > 80 else cleaned
 
 
 def chromium_time(value: str | None) -> datetime | None:

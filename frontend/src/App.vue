@@ -129,7 +129,11 @@ async function runImport(): Promise<void> {
   }
   try {
     const result = await importBrowserFile(importBrowser.value, importFile.value);
-    notice.value = `Imported ${result.imported}; skipped ${result.skipped}.`;
+    const summary = `Imported ${result.imported}; skipped ${result.skipped}.`;
+    const warnings = (result.warnings ?? [])
+      .map((warning) => warning.message)
+      .join(" ");
+    notice.value = warnings ? `${summary} Warnings: ${warnings}` : summary;
     await loadBookmarks();
   } catch (caught) {
     error.value = messageFrom(caught);

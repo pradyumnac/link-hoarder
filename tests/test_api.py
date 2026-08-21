@@ -159,8 +159,8 @@ def test_api_imports_uploaded_chromium_file(tmp_path: Path) -> None:
     assert response.json()["imported"] == 1
 
 
-def test_api_rejects_invalid_uploaded_profile(tmp_path: Path) -> None:
-    """Given an invalid uploaded profile, the API returns HTTP 422."""
+def test_api_warns_for_invalid_uploaded_profile(tmp_path: Path) -> None:
+    """Given an invalid uploaded profile, the API returns a structured warning."""
     response = _client(tmp_path).post(
         f"{_API_PREFIX}/imports/browser-file",
         headers={**_HEADERS, "Content-Type": "application/octet-stream"},
@@ -168,7 +168,8 @@ def test_api_rejects_invalid_uploaded_profile(tmp_path: Path) -> None:
         content=b"not-json",
     )
 
-    assert response.status_code == 422
+    assert response.status_code == 200
+    assert response.json()["warnings"][0]["code"] == "profile_invalid"
 
 
 def test_api_import_rejects_missing_profile(tmp_path: Path) -> None:

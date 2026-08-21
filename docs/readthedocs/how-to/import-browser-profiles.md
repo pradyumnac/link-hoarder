@@ -24,3 +24,5 @@ link-hoarder import-browser firefox --profile /path/to/places.sqlite
 ```
 
 The importer skips a URL that already exists in the Link Hoarder database.
+The command writes each import warning to standard error. The JSON result also
+contains the warnings. Valid bookmarks continue to import after an entry failure.

@@ -67,6 +67,34 @@ describe("App", () => {
     expect(wrapper.text()).toContain("Bookmark created.");
   });
 
+  it("shows browser import warnings with the import summary", async () => {
+    vi.mocked(api.importBrowserFile).mockResolvedValue({
+      browser: "chrome",
+      discovered: 1,
+      imported: 0,
+      profiles: 1,
+      skipped: 0,
+      warnings: [
+        {
+          code: "bookmark_invalid",
+          message: "One bookmark is invalid.",
+          profile: "Bookmarks",
+        },
+      ],
+    });
+    const wrapper = mount(App);
+    await flushPromises();
+    const input = wrapper.get('input[type="file"]');
+    const file = new File(["profile"], "Bookmarks");
+    Object.defineProperty(input.element, "files", { value: [file] });
+
+    await input.trigger("change");
+    await wrapper.get(".import-form").trigger("submit");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("Warnings: One bookmark is invalid.");
+  });
+
   it("shows an API failure without removing the current collection", async () => {
     vi.mocked(api.createBookmark).mockRejectedValue(new Error("URL conflict"));
     const wrapper = mount(App);

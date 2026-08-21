@@ -19,6 +19,8 @@ Resource routes use the `/api/v1` prefix. The `/health` route is not versioned.
 The list response contains `items`, `total`, `limit`, and `offset` fields.
 Create and update operations return HTTP 409 when a normalized URL already exists.
 Browser imports skip an existing normalized URL and increment the `skipped` count.
+The import response includes structured warnings for invalid entries, unreadable
+profiles, malformed files, and storage failures. Valid entries continue to import.
 
 Send uploaded profile bytes as `application/octet-stream`. Set the `browser` query
 parameter to `chrome`, `chromium`, `edge`, or `firefox`.

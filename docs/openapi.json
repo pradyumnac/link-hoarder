@@ -308,6 +308,13 @@
           "skipped": {
             "title": "Skipped",
             "type": "integer"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/ImportWarning"
+            },
+            "title": "Warnings",
+            "type": "array"
           }
         },
         "required": [
@@ -319,6 +326,40 @@
         ],
         "title": "ImportResult",
         "type": "object"
+      },
+      "ImportWarning": {
+        "description": "One browser import failure that did not stop the full import.",
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/ImportWarningCode"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "profile": {
+            "title": "Profile",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "profile"
+        ],
+        "title": "ImportWarning",
+        "type": "object"
+      },
+      "ImportWarningCode": {
+        "description": "Browser import warning category.",
+        "enum": [
+          "bookmark_invalid",
+          "bookmark_store_failed",
+          "profile_invalid",
+          "profile_unreadable"
+        ],
+        "title": "ImportWarningCode",
+        "type": "string"
       },
       "ValidationError": {
         "properties": {
