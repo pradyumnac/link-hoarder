@@ -41,7 +41,7 @@ export interface paths {
         patch: operations["update_bookmark_api_v1_bookmarks__bookmark_id__patch"];
         trace?: never;
     };
-    "/api/v1/imports/browser-file": {
+    "/api/v1/imports/bookmarks-file": {
         parameters: {
             query?: never;
             header?: never;
@@ -50,8 +50,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Import Browser File */
-        post: operations["import_browser_file_api_v1_imports_browser_file_post"];
+        /** Import Bookmarks File */
+        post: operations["import_bookmarks_file_api_v1_imports_bookmarks_file_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -142,7 +142,7 @@ export interface components {
          * @description Bookmark origin.
          * @enum {string}
          */
-        BookmarkSource: "manual" | "chrome" | "chromium" | "edge" | "firefox";
+        BookmarkSource: "manual" | "chrome" | "chromium" | "edge" | "firefox" | "html";
         /**
          * BookmarkUpdate
          * @description Partial bookmark update input.
@@ -157,12 +157,6 @@ export interface components {
             /** Url */
             url?: string | null;
         };
-        /**
-         * Browser
-         * @description Supported browser families.
-         * @enum {string}
-         */
-        Browser: "chrome" | "chromium" | "edge" | "firefox";
         /**
          * ErrorDetail
          * @description API error response.
@@ -188,13 +182,18 @@ export interface components {
             status: string;
         };
         /**
-         * ImportResult
-         * @description Browser import result.
+         * HtmlImportResult
+         * @description Bookmark HTML export import result.
          */
-        ImportResult: {
-            browser: components["schemas"]["Browser"];
+        HtmlImportResult: {
             /** Discovered */
             discovered: number;
+            /**
+             * Format
+             * @default netscape_html
+             * @constant
+             */
+            format: "netscape_html";
             /** Imported */
             imported: number;
             /** Profiles */
@@ -206,7 +205,7 @@ export interface components {
         };
         /**
          * ImportWarning
-         * @description One browser import failure that did not stop the full import.
+         * @description One import failure that did not stop the full import.
          */
         ImportWarning: {
             code: components["schemas"]["ImportWarningCode"];
@@ -217,7 +216,7 @@ export interface components {
         };
         /**
          * ImportWarningCode
-         * @description Browser import warning category.
+         * @description Bookmark import warning category.
          * @enum {string}
          */
         ImportWarningCode: "bookmark_invalid" | "bookmark_store_failed" | "profile_invalid" | "profile_unreadable";
@@ -422,18 +421,16 @@ export interface operations {
             };
         };
     };
-    import_browser_file_api_v1_imports_browser_file_post: {
+    import_bookmarks_file_api_v1_imports_bookmarks_file_post: {
         parameters: {
-            query: {
-                browser: components["schemas"]["Browser"];
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/octet-stream": string;
+                "text/html": string;
             };
         };
         responses: {
@@ -443,7 +440,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ImportResult"];
+                    "application/json": components["schemas"]["HtmlImportResult"];
                 };
             };
             /** @description Validation Error */

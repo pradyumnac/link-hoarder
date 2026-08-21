@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime
 from enum import StrEnum
+from typing import Literal
 
 from pydantic import HttpUrl, TypeAdapter, field_validator, model_validator
 from sqlalchemy import JSON, Column
@@ -39,6 +40,7 @@ class BookmarkSource(StrEnum):
     CHROMIUM = "chromium"
     EDGE = "edge"
     FIREFOX = "firefox"
+    HTML = "html"
 
 
 class BookmarkFields(SQLModel):
@@ -113,7 +115,7 @@ class BookmarkPage(SQLModel):
 
 
 class ImportWarningCode(StrEnum):
-    """Browser import warning category."""
+    """Bookmark import warning category."""
 
     BOOKMARK_INVALID = "bookmark_invalid"
     BOOKMARK_STORE_FAILED = "bookmark_store_failed"
@@ -122,19 +124,30 @@ class ImportWarningCode(StrEnum):
 
 
 class ImportWarning(SQLModel):
-    """One browser import failure that did not stop the full import."""
+    """One import failure that did not stop the full import."""
 
     code: ImportWarningCode
     message: str
     profile: str
 
 
-class ImportResult(SQLModel):
-    """Browser import result."""
+class ImportSummary(SQLModel):
+    """Fields shared by bookmark import results."""
 
-    browser: Browser
     profiles: int
     discovered: int
     imported: int
     skipped: int
     warnings: list[ImportWarning] = Field(default_factory=list)
+
+
+class ImportResult(ImportSummary):
+    """Native browser profile import result."""
+
+    browser: Browser
+
+
+class HtmlImportResult(ImportSummary):
+    """Bookmark HTML export import result."""
+
+    format: Literal["netscape_html"] = "netscape_html"

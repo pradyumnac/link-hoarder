@@ -13,6 +13,7 @@ bookmarklet.
 | `update` | Update supplied bookmark fields. |
 | `delete` | Delete one bookmark. |
 | `import-browser` | Import native browser profile files. |
+| `import-file` | Import a Netscape bookmark HTML export. |
 | `api` | Run the HTTP API. |
 
 Unix users can open `docs/man/link-hoarder.1` with `man -l`.

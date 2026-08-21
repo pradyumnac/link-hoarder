@@ -9,14 +9,19 @@ from pydantic import ValidationError
 
 from link_hoarder.api.app import create_app
 from link_hoarder.core.config import Settings
-from link_hoarder.core.importers import import_profiles
+from link_hoarder.core.importers import import_html_export, import_profiles
 from link_hoarder.core.logging import configure_logging
-from link_hoarder.core.models import BookmarkCreate, BookmarkUpdate, Browser
+from link_hoarder.core.models import (
+    BookmarkCreate,
+    BookmarkUpdate,
+    Browser,
+    ImportSummary,
+)
 from link_hoarder.core.repository import BookmarkRepository
 
 app = typer.Typer(
     name="link-hoarder",
-    help="Store bookmarks and import native browser profiles.",
+    help="Store bookmarks and import browser data.",
     no_args_is_help=True,
 )
 
@@ -144,12 +149,26 @@ def import_browser(
     """Import native browser profile bookmarks."""
     settings = Settings()
     result = import_profiles(_repository(settings), browser, profile)
-    for warning in result.warnings:
-        typer.echo(
-            f"Warning [{warning.code.value}] {warning.profile}: {warning.message}",
-            err=True,
-        )
-    typer.echo(result.model_dump_json(indent=2))
+    _emit_import_result(result)
+
+
+@app.command("import-file")
+def import_file(
+    path: Annotated[
+        Path,
+        typer.Argument(
+            exists=True,
+            file_okay=True,
+            dir_okay=False,
+            readable=True,
+            help="Netscape bookmark HTML export file.",
+        ),
+    ],
+) -> None:
+    """Import a browser bookmark HTML export."""
+    settings = Settings()
+    result = import_html_export(_repository(settings), path)
+    _emit_import_result(result)
 
 
 @app.command("api")
@@ -172,6 +191,15 @@ def run_api(
         date_header=False,
         server_header=False,
     )
+
+
+def _emit_import_result(result: ImportSummary) -> None:
+    for warning in result.warnings:
+        typer.echo(
+            f"Warning [{warning.code.value}] {warning.profile}: {warning.message}",
+            err=True,
+        )
+    typer.echo(result.model_dump_json(indent=2))
 
 
 def main() -> None:

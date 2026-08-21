@@ -25,15 +25,14 @@ from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
 
 from link_hoarder.core.config import Settings
-from link_hoarder.core.importers import import_profiles
+from link_hoarder.core.importers import import_html_export
 from link_hoarder.core.logging import configure_logging
 from link_hoarder.core.models import (
     BookmarkCreate,
     BookmarkPage,
     BookmarkRead,
     BookmarkUpdate,
-    Browser,
-    ImportResult,
+    HtmlImportResult,
 )
 from link_hoarder.core.repository import BookmarkRepository, DuplicateBookmarkError
 
@@ -178,23 +177,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise _not_found(bookmark_id)
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
-    @router.post("/imports/browser-file", tags=["imports"])
-    def import_browser_file(
-        browser: Annotated[Browser, Query()],
+    @router.post("/imports/bookmarks-file", tags=["imports"])
+    def import_bookmarks_file(
         content: Annotated[
             bytes,
             Body(
-                media_type="application/octet-stream",
+                media_type="text/html",
                 min_length=1,
                 max_length=_MAX_PROFILE_BYTES,
             ),
         ],
-    ) -> ImportResult:
-        filename = "places.sqlite" if browser is Browser.FIREFOX else "Bookmarks"
+    ) -> HtmlImportResult:
+        filename = "bookmarks.html"
         with tempfile.TemporaryDirectory() as temporary:
             profile = Path(temporary) / filename
             profile.write_bytes(content)
-            result = import_profiles(repository, browser, profile)
+            result = import_html_export(repository, profile)
             warnings = [
                 warning.model_copy(update={"profile": filename})
                 for warning in result.warnings

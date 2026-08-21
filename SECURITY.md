@@ -18,5 +18,6 @@ provide user accounts or authorization levels.
 
 ## Uploads
 
-The API accepts browser profile uploads up to 16 MiB. It does not accept server-local
-profile paths. Keep browser profiles private because they can contain browsing data.
+The API accepts bookmark HTML exports up to 16 MiB. It does not accept native
+browser profiles or server-local paths. Keep bookmark exports private because they
+contain browsing data.

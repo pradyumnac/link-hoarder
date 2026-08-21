@@ -1,6 +1,5 @@
 """FastAPI integration tests."""
 
-import json
 from pathlib import Path
 
 import pytest
@@ -171,67 +170,60 @@ def test_api_creates_javascript_bookmarklet(tmp_path: Path) -> None:
     assert response.json()["tags"] == ["bookmarklet"]
 
 
-def test_api_imports_uploaded_chromium_file(tmp_path: Path) -> None:
-    """Given an uploaded Chromium file, the API imports its valid bookmarks."""
-    profile = json.dumps(
-        {
-            "roots": {
-                "other": {
-                    "children": [
-                        {
-                            "name": "Example",
-                            "type": "url",
-                            "url": "https://example.com",
-                        }
-                    ]
-                }
-            }
-        }
-    ).encode()
+def test_api_imports_uploaded_bookmark_html(tmp_path: Path) -> None:
+    """Given an uploaded HTML export, the API imports its valid bookmarks."""
+    export = b"""<!DOCTYPE NETSCAPE-Bookmark-file-1>
+<DL><p><DT><A HREF="https://example.com">Example</A></DL><p>
+"""
 
     response = _client(tmp_path).post(
-        f"{_API_PREFIX}/imports/browser-file",
-        headers={**_HEADERS, "Content-Type": "application/octet-stream"},
-        params={"browser": "chrome"},
-        content=profile,
+        f"{_API_PREFIX}/imports/bookmarks-file",
+        headers={**_HEADERS, "Content-Type": "text/html"},
+        content=export,
     )
 
     assert response.status_code == 200
     assert response.json()["imported"] == 1
+    assert response.json()["format"] == "netscape_html"
 
 
-def test_api_warns_for_invalid_uploaded_profile(tmp_path: Path) -> None:
-    """Given an invalid uploaded profile, the API returns a structured warning."""
+def test_api_warns_for_invalid_uploaded_export(tmp_path: Path) -> None:
+    """Given an invalid HTML export, the API returns a structured warning."""
     response = _client(tmp_path).post(
-        f"{_API_PREFIX}/imports/browser-file",
-        headers={**_HEADERS, "Content-Type": "application/octet-stream"},
-        params={"browser": "chrome"},
-        content=b"not-json",
+        f"{_API_PREFIX}/imports/bookmarks-file",
+        headers={**_HEADERS, "Content-Type": "text/html"},
+        content=b"not-bookmark-html",
     )
 
     assert response.status_code == 200
     assert response.json()["warnings"][0]["code"] == "profile_invalid"
-    assert response.json()["warnings"][0]["profile"] == "Bookmarks"
+    assert response.json()["warnings"][0]["profile"] == "bookmarks.html"
     assert str(tmp_path) not in response.text
 
 
-def test_api_rejects_server_path_imports(tmp_path: Path) -> None:
-    """Given a server path import request, the API does not expose that route."""
-    response = _client(tmp_path).post(
+def test_api_rejects_native_profile_imports(tmp_path: Path) -> None:
+    """Given a native profile request, the web API does not expose that route."""
+    client = _client(tmp_path)
+    path_import = client.post(
         f"{_API_PREFIX}/imports/browser",
         headers=_HEADERS,
         json={"browser": "firefox", "profile": "/etc/passwd"},
     )
+    file_import = client.post(
+        f"{_API_PREFIX}/imports/browser-file",
+        headers={**_HEADERS, "Content-Type": "application/octet-stream"},
+        content=b"profile",
+    )
 
-    assert response.status_code == 404
+    assert path_import.status_code == 404
+    assert file_import.status_code == 404
 
 
 def test_api_rejects_oversized_profile(tmp_path: Path) -> None:
-    """Given a profile over 16 MiB, the API rejects the request body."""
+    """Given an export over 16 MiB, the API rejects the request body."""
     response = _client(tmp_path).post(
-        f"{_API_PREFIX}/imports/browser-file",
-        headers={**_HEADERS, "Content-Type": "application/octet-stream"},
-        params={"browser": "chrome"},
+        f"{_API_PREFIX}/imports/bookmarks-file",
+        headers={**_HEADERS, "Content-Type": "text/html"},
         content=b"x" * (16 * 1024 * 1024 + 1),
     )
 

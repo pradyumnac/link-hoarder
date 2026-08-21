@@ -86,6 +86,26 @@ def test_cli_update_delete_and_import(
     assert deleted.exit_code == 0
 
 
+def test_cli_imports_bookmark_html_export(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Given a bookmark HTML export, the CLI imports it as an additional workflow."""
+    monkeypatch.setenv("LINK_HOARDER_DATABASE_PATH", str(tmp_path / "cli.db"))
+    export = tmp_path / "bookmarks.html"
+    export.write_text(
+        """<!DOCTYPE NETSCAPE-Bookmark-file-1>
+<DL><p><DT><A HREF="https://example.com">Example</A></DL><p>
+""",
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["import-file", str(export)])
+
+    assert result.exit_code == 0
+    assert json.loads(result.stdout)["format"] == "netscape_html"
+    assert json.loads(result.stdout)["imported"] == 1
+
+
 def test_cli_get_missing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Given an unknown identifier, the CLI reports a not-found exit."""
     monkeypatch.setenv("LINK_HOARDER_DATABASE_PATH", str(tmp_path / "cli.db"))

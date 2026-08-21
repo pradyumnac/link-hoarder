@@ -4,8 +4,7 @@ export type Bookmark = components["schemas"]["BookmarkRead"];
 export type BookmarkCreate = components["schemas"]["BookmarkCreate"];
 export type BookmarkPage = components["schemas"]["BookmarkPage"];
 export type BookmarkUpdate = components["schemas"]["BookmarkUpdate"];
-export type Browser = components["schemas"]["Browser"];
-export type ImportResult = components["schemas"]["ImportResult"];
+export type HtmlImportResult = components["schemas"]["HtmlImportResult"];
 
 const API_PREFIX = "/api/v1";
 
@@ -61,14 +60,10 @@ export function deleteBookmark(bookmarkId: number): Promise<void> {
   return request<void>(`/bookmarks/${bookmarkId}`, { method: "DELETE" });
 }
 
-export function importBrowserFile(
-  browser: Browser,
-  file: File,
-): Promise<ImportResult> {
-  const parameters = new URLSearchParams({ browser });
-  return request<ImportResult>(`/imports/browser-file?${parameters.toString()}`, {
+export function importBookmarkFile(file: File): Promise<HtmlImportResult> {
+  return request<HtmlImportResult>("/imports/bookmarks-file", {
     body: file,
-    headers: { "Content-Type": "application/octet-stream" },
+    headers: { "Content-Type": "text/html" },
     method: "POST",
   });
 }

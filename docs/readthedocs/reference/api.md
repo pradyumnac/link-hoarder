@@ -14,14 +14,13 @@ Resource routes use the `/api/v1` prefix. The `/health` route is not versioned.
 | `GET` | `/api/v1/bookmarks/{id}` | Get one bookmark. |
 | `PATCH` | `/api/v1/bookmarks/{id}` | Update supplied fields. |
 | `DELETE` | `/api/v1/bookmarks/{id}` | Delete one bookmark. |
-| `POST` | `/api/v1/imports/browser-file` | Import an uploaded browser profile. |
+| `POST` | `/api/v1/imports/bookmarks-file` | Import a bookmark HTML export. |
 
 The list response contains `items`, `total`, `limit`, and `offset` fields.
 Create and update operations return HTTP 409 when a normalized URL already exists.
-Browser imports skip an existing normalized URL and increment the `skipped` count.
+Imports skip an existing normalized URL and increment the `skipped` count.
 The import response includes structured warnings for invalid entries, unreadable
-profiles, malformed files, and storage failures. Valid entries continue to import.
+exports, malformed files, and storage failures. Valid entries continue to import.
 
-Send uploaded profile bytes as `application/octet-stream`. Set the `browser` query
-parameter to `chrome`, `chromium`, `edge`, or `firefox`. The maximum file size is
-16 MiB. The API does not accept server-local profile paths.
+Send a Netscape bookmark export as `text/html`. The maximum file size is 16 MiB.
+The web API does not accept native browser profiles or server-local paths.

@@ -1,6 +1,6 @@
 .TH LINK-HOARDER 1 "" "link-hoarder 0.1.0" "User Commands"
 .SH NAME
-link-hoarder \- manage bookmarks and import browser profiles
+link-hoarder \- manage bookmarks and import browser data
 .SH SYNOPSIS
 .B link-hoarder
 .I COMMAND
@@ -26,6 +26,9 @@ Delete one bookmark.
 .TP
 .B import-browser BROWSER [--profile FILE]
 Import chrome, chromium, edge, or firefox profile data. Omit --profile to discover profiles.
+.TP
+.B import-file FILE
+Import a Netscape bookmark HTML export.
 .TP
 .B api [--host HOST] [--port PORT]
 Run the FastAPI server. Set LINK_HOARDER_API_KEY first.

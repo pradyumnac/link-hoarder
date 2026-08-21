@@ -22,6 +22,7 @@ uv tool install link-hoarder
 link-hoarder create https://example.com --title Example
 link-hoarder list
 link-hoarder import-browser firefox
+link-hoarder import-file bookmarks.html
 ```
 
 Run `link-hoarder COMMAND --help` for command details. Unix users can also read `docs/man/link-hoarder.1`.

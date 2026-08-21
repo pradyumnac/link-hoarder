@@ -7,7 +7,13 @@ from pathlib import Path
 import pytest
 
 from link_hoarder.core import importers
-from link_hoarder.core.importers import discover_profiles, import_profiles, read_profile
+from link_hoarder.core.importers import (
+    discover_profiles,
+    import_html_export,
+    import_profiles,
+    read_html_export,
+    read_profile,
+)
 from link_hoarder.core.models import BookmarkCreate, BookmarkRead, Browser
 from link_hoarder.core.repository import BookmarkRepository, BookmarkStorageError
 
@@ -115,6 +121,38 @@ def test_read_chromium_imports_bookmarklet(tmp_path: Path) -> None:
     assert result.bookmarks[1].tags == []
     assert result.discovered == 3
     assert result.warnings[0].code == "bookmark_invalid"
+
+
+def test_import_html_export_preserves_folders_and_bookmarklets(
+    tmp_path: Path, repository: BookmarkRepository
+) -> None:
+    """Given an HTML export, import preserves folders and skips duplicate URLs."""
+    export = tmp_path / "bookmarks.html"
+    export.write_text(
+        """<!DOCTYPE NETSCAPE-Bookmark-file-1>
+<DL><p>
+  <DT><H3>Tools</H3>
+  <DL><p>
+    <DT><A HREF="https://example.com">Example</A>
+    <DT><A HREF="javascript:void(0)">Reader</A>
+    <DT><A HREF="ftp://example.com">Invalid</A>
+  </DL><p>
+</DL><p>
+""",
+        encoding="utf-8",
+    )
+
+    parsed = read_html_export(export)
+    first = import_html_export(repository, export)
+    second = import_html_export(repository, export)
+
+    assert parsed.discovered == 3
+    assert [bookmark.folder for bookmark in parsed.bookmarks] == ["Tools", "Tools"]
+    assert parsed.bookmarks[1].tags == ["bookmarklet"]
+    assert first.imported == 2
+    assert first.warnings[0].code == "bookmark_invalid"
+    assert second.imported == 0
+    assert second.skipped == 2
 
 
 def test_read_firefox_bookmark(tmp_path: Path) -> None:

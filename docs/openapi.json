@@ -149,7 +149,8 @@
           "chrome",
           "chromium",
           "edge",
-          "firefox"
+          "firefox",
+          "html"
         ],
         "title": "BookmarkSource",
         "type": "string"
@@ -213,17 +214,6 @@
         "title": "BookmarkUpdate",
         "type": "object"
       },
-      "Browser": {
-        "description": "Supported browser families.",
-        "enum": [
-          "chrome",
-          "chromium",
-          "edge",
-          "firefox"
-        ],
-        "title": "Browser",
-        "type": "string"
-      },
       "ErrorDetail": {
         "description": "API error response.",
         "properties": {
@@ -263,15 +253,18 @@
         "title": "Health",
         "type": "object"
       },
-      "ImportResult": {
-        "description": "Browser import result.",
+      "HtmlImportResult": {
+        "description": "Bookmark HTML export import result.",
         "properties": {
-          "browser": {
-            "$ref": "#/components/schemas/Browser"
-          },
           "discovered": {
             "title": "Discovered",
             "type": "integer"
+          },
+          "format": {
+            "const": "netscape_html",
+            "default": "netscape_html",
+            "title": "Format",
+            "type": "string"
           },
           "imported": {
             "title": "Imported",
@@ -294,17 +287,16 @@
           }
         },
         "required": [
-          "browser",
           "profiles",
           "discovered",
           "imported",
           "skipped"
         ],
-        "title": "ImportResult",
+        "title": "HtmlImportResult",
         "type": "object"
       },
       "ImportWarning": {
-        "description": "One browser import failure that did not stop the full import.",
+        "description": "One import failure that did not stop the full import.",
         "properties": {
           "code": {
             "$ref": "#/components/schemas/ImportWarningCode"
@@ -327,7 +319,7 @@
         "type": "object"
       },
       "ImportWarningCode": {
-        "description": "Browser import warning category.",
+        "description": "Bookmark import warning category.",
         "enum": [
           "bookmark_invalid",
           "bookmark_store_failed",
@@ -673,22 +665,12 @@
         ]
       }
     },
-    "/api/v1/imports/browser-file": {
+    "/api/v1/imports/bookmarks-file": {
       "post": {
-        "operationId": "import_browser_file_api_v1_imports_browser_file_post",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "browser",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/Browser"
-            }
-          }
-        ],
+        "operationId": "import_bookmarks_file_api_v1_imports_bookmarks_file_post",
         "requestBody": {
           "content": {
-            "application/octet-stream": {
+            "text/html": {
               "schema": {
                 "contentMediaType": "application/octet-stream",
                 "maxLength": 16777216,
@@ -705,7 +687,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ImportResult"
+                  "$ref": "#/components/schemas/HtmlImportResult"
                 }
               }
             },
@@ -727,7 +709,7 @@
             "APIKeyHeader": []
           }
         ],
-        "summary": "Import Browser File",
+        "summary": "Import Bookmarks File",
         "tags": [
           "imports"
         ]

@@ -20,7 +20,7 @@ $env:LINK_HOARDER_DATABASE_PATH = "$PWD\.manual-test.db"
 uv run link-hoarder --help
 ```
 
-Confirm that help lists `create`, `list`, `get`, `update`, `delete`, `import-browser`, and `api`.
+Confirm that help lists `create`, `list`, `get`, `update`, `delete`, `import-browser`, `import-file`, and `api`.
 
 ## 2. Test CLI CRUD
 
@@ -53,7 +53,13 @@ uv run link-hoarder import-browser chrome --profile /path/to/Bookmarks
 uv run link-hoarder import-browser firefox --profile /path/to/places.sqlite
 ```
 
-Run the import command a second time. The second run must report skipped URLs.
+Import a Netscape bookmark HTML export:
+
+```console
+uv run link-hoarder import-file /path/to/bookmarks.html
+```
+
+Run each import command a second time. The second run must report skipped URLs.
 
 ## 4. Test the API
 
@@ -83,7 +89,7 @@ Test these cases:
 2. Send the key in `X-API-Key`. Confirm HTTP 200.
 3. Create a bookmark with `/api/v1/bookmarks`.
 4. List, update, and delete the bookmark.
-5. Upload an invalid browser file. Confirm a structured import warning.
+5. Upload an invalid bookmark HTML export. Confirm a structured import warning.
 6. Confirm that `/docs` and `/openapi.json` return HTTP 404.
 
 ## 5. Build the package

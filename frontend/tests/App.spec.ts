@@ -10,7 +10,7 @@ vi.mock("../src/api/client", async (loadOriginal) => {
     ...original,
     createBookmark: vi.fn(),
     deleteBookmark: vi.fn(),
-    importBrowserFile: vi.fn(),
+    importBookmarkFile: vi.fn(),
     listBookmarks: vi.fn(),
     updateBookmark: vi.fn(),
   };
@@ -68,8 +68,8 @@ describe("App", () => {
   });
 
   it("shows browser import warnings with the import summary", async () => {
-    vi.mocked(api.importBrowserFile).mockResolvedValue({
-      browser: "chrome",
+    vi.mocked(api.importBookmarkFile).mockResolvedValue({
+      format: "netscape_html",
       discovered: 1,
       imported: 0,
       profiles: 1,

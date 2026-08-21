@@ -4,11 +4,10 @@ import { computed, onMounted, reactive, ref } from "vue";
 import {
   createBookmark,
   deleteBookmark,
-  importBrowserFile,
+  importBookmarkFile,
   listBookmarks,
   updateBookmark,
   type Bookmark,
-  type Browser,
 } from "./api/client";
 
 const PAGE_SIZE = 10;
@@ -20,7 +19,6 @@ const error = ref("");
 const notice = ref("");
 const loading = ref(false);
 const editingId = ref<number | null>(null);
-const importBrowser = ref<Browser>("chrome");
 const importFile = ref<File | null>(null);
 const form = reactive({ folder: "", tags: "", title: "", url: "" });
 
@@ -124,11 +122,11 @@ function selectImportFile(event: Event): void {
 
 async function runImport(): Promise<void> {
   if (importFile.value === null) {
-    error.value = "Select a browser profile file.";
+    error.value = "Select a bookmark HTML export file.";
     return;
   }
   try {
-    const result = await importBrowserFile(importBrowser.value, importFile.value);
+    const result = await importBookmarkFile(importFile.value);
     const summary = `Imported ${result.imported}; skipped ${result.skipped}.`;
     const warnings = (result.warnings ?? [])
       .map((warning) => warning.message)
@@ -177,11 +175,10 @@ onMounted(loadBookmarks);
 
     <section class="panel" aria-labelledby="import-heading">
       <div class="section-heading">
-        <div><p class="eyebrow">Browser data</p><h2 id="import-heading">Import a profile</h2></div>
+        <div><p class="eyebrow">Browser export</p><h2 id="import-heading">Import bookmark HTML</h2></div>
       </div>
       <form class="import-form" @submit.prevent="runImport">
-        <label>Browser<select v-model="importBrowser"><option value="chrome">Chrome</option><option value="chromium">Chromium</option><option value="edge">Edge</option><option value="firefox">Firefox</option></select></label>
-        <label>Profile file<input type="file" required @change="selectImportFile" /></label>
+        <label>Bookmark export<input type="file" accept=".html,.htm,text/html" required @change="selectImportFile" /></label>
         <button class="secondary" type="submit">Import bookmarks</button>
       </form>
     </section>
