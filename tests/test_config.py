@@ -36,6 +36,7 @@ def test_cli_config_round_trip_uses_private_permissions(tmp_path: Path) -> None:
         backend=BackendKind.API,
         api_url=HttpUrl("https://links.example"),
         api_key=SecretStr("a" * 32),
+        export_directory=tmp_path / "exports",
     )
 
     save_cli_config(expected, path)

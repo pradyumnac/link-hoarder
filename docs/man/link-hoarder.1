@@ -4,6 +4,7 @@ link-hoarder \- manage bookmarks and import browser data
 .SH SYNOPSIS
 .B link-hoarder
 .RI [ --backend " local|api" ]
+.RI [ --debug ]
 .I COMMAND
 .RI [ OPTIONS ]
 .SH DESCRIPTION
@@ -11,31 +12,36 @@ Link Hoarder stores bookmarks in local SQLite or through an HTTP API. Commands r
 .SH COMMANDS
 .TP
 .B create URL --title TITLE
-Create a bookmark. Use --folder and repeated --tag options for metadata.
+Create a bookmark. Use --folder and repeated --tag options for metadata. A matching repeated create returns the existing bookmark.
 .TP
-.B list [--query TEXT] [--limit NUMBER] [--offset NUMBER]
-List bookmarks. Filter titles and URLs with --query.
+.B list [--query TEXT] [--limit NUMBER] [--offset NUMBER] [--json]
+List bookmarks as readable text. Filter titles and URLs with --query. Use --json for structured output.
 .TP
-.B get ID
-Get one bookmark.
+.B get ID [--json]
+Get one bookmark as readable text. Use --json for structured output.
 .TP
 .B update ID [--url URL] [--title TITLE] [--folder FOLDER] [--tag TAG]
 Update supplied bookmark fields.
 .TP
 .B delete ID
-Delete one bookmark.
+Delete one bookmark. A repeated delete succeeds when the bookmark is already absent.
 .TP
 .B import-browser BROWSER [--profile FILE]
-Import brave, chrome, chromium, edge, firefox, or zen profile data. Omit --profile to discover profiles.
+Import brave, chrome, chromium, edge, firefox, or zen profile data. Omit --profile to discover profiles. Firefox-family imports use a read-only SQLite snapshot.
 .TP
 .B import-file FILE
 Import a Netscape bookmark HTML export.
 .TP
+.B export [DIRECTORY] [--interactive|--no-interactive] [--force]
+Export bookmarks to HTML and JSON subdirectories. Interactive mode prompts by default.
+.TP
 .B config
-Show saved backend configuration without secrets.
+Show saved backend and export configuration without secrets.
 .TP
 .B api [--host HOST] [--port PORT]
 Run the FastAPI server. Set LINK_HOARDER_API_KEY first.
+.SH OUTPUT
+Command results use standard output. Warnings, feedback, and debug checkpoints use standard error. Use global --debug before a command to enable checkpoints.
 .SH ENVIRONMENT
 .TP
 .B LINK_HOARDER_BACKEND
@@ -60,7 +66,7 @@ Structured log level. The default is INFO.
 .I docs/readthedocs/reference/configuration.md
 Complete configuration reference.
 .SH EXIT STATUS
-Zero indicates success. One indicates a missing bookmark. Two indicates invalid backend or server configuration.
+Zero indicates success or an existing requested final state. One indicates a conflict, missing result, or cancelled action. Two indicates invalid input, configuration, storage, export, or connection failure.
 .SH SEE ALSO
 .BR uvx (1),
 .BR docker-compose (1)

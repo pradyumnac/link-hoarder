@@ -24,6 +24,19 @@ def test_repository_crud(repository: BookmarkRepository) -> None:
     assert repository.get(created.id) is None
 
 
+def test_repository_repeated_update_preserves_timestamp(
+    repository: BookmarkRepository,
+) -> None:
+    """Given an unchanged update, the repository returns the existing state."""
+    created = repository.create(
+        BookmarkCreate(url="https://example.com", title="Example")
+    )
+
+    updated = repository.update(created.id, BookmarkUpdate(title="Example"))
+
+    assert updated == created
+
+
 def test_repository_unknown_identifier(repository: BookmarkRepository) -> None:
     """Given an unknown identifier, update and delete return not-found values."""
     assert repository.update(999, BookmarkUpdate(title="Missing")) is None

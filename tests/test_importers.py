@@ -223,6 +223,50 @@ def test_read_firefox_bookmark(tmp_path: Path, browser: Browser, source: str) ->
     assert result.bookmarks[0].folder == "Toolbar"
 
 
+def test_read_zen_uses_a_stable_live_snapshot(tmp_path: Path) -> None:
+    """Given a live Zen database, each import reads one stable committed snapshot."""
+    profile = tmp_path / "places.sqlite"
+    writer = sqlite3.connect(profile)
+    try:
+        writer.executescript(
+            """
+            PRAGMA journal_mode=WAL;
+            PRAGMA wal_autocheckpoint=0;
+            CREATE TABLE moz_places (id INTEGER PRIMARY KEY, url TEXT, title TEXT);
+            CREATE TABLE moz_bookmarks (
+                id INTEGER PRIMARY KEY, fk INTEGER, type INTEGER, title TEXT, parent INTEGER
+            );
+            INSERT INTO moz_bookmarks VALUES (10, NULL, 2, 'Toolbar', 0);
+            INSERT INTO moz_places VALUES (1, 'https://one.example', 'One');
+            INSERT INTO moz_bookmarks VALUES (11, 1, 1, NULL, 10);
+            """
+        )
+        writer.commit()
+        writer.executescript(
+            """
+            INSERT INTO moz_places VALUES (2, 'https://two.example', 'Two');
+            INSERT INTO moz_bookmarks VALUES (12, 2, 1, NULL, 10);
+            """
+        )
+        writer.commit()
+
+        first = read_profile(Browser.ZEN, profile)
+
+        writer.executescript(
+            """
+            INSERT INTO moz_places VALUES (3, 'https://three.example', 'Three');
+            INSERT INTO moz_bookmarks VALUES (13, 3, 1, NULL, 10);
+            """
+        )
+        writer.commit()
+        second = read_profile(Browser.ZEN, profile)
+    finally:
+        writer.close()
+
+    assert [bookmark.title for bookmark in first.bookmarks] == ["One", "Two"]
+    assert [bookmark.title for bookmark in second.bookmarks] == ["One", "Two", "Three"]
+
+
 def test_import_skips_existing_url(
     tmp_path: Path, repository: BookmarkRepository
 ) -> None:

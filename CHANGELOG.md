@@ -4,6 +4,9 @@
 
 ### Added
 
+- Export bookmarks to browser-compatible HTML and structured JSON files (cli-bookmark-export).
+- Import native Brave and Zen browser profiles (import-brave.zen-native).
+- Add responsive browser views, filters, folder navigation, saved display settings, and modal workflows (core-browser-workspace).
 - Add a browser notification center for session failure events (core-failure-notifications).
 - Show import summaries and duplicate skips as notification events (core-import-events).
 - Add interchangeable local and API CLI backends with interactive user setup (cli-backend-selection, ADR-0002).
@@ -18,6 +21,8 @@
 
 ### Changed
 
+- Make CLI output readable, debuggable, repeatable, and explicit about error states (cli-output-resilience).
+- Read live Firefox and Zen databases through stable, read-only SQLite snapshots (import-live-snapshot).
 - Build and publish complete Diataxis documentation (docs-diataxis-site).
 - Add a versioned API contract, pagination, duplicate protection, and profile uploads (api-contract-v1).
 - Apply Twelve-Factor runtime practices and document SQLite scaling exceptions (infra-twelve-factor).

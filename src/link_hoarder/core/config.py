@@ -57,6 +57,7 @@ class SavedCliConfig(BaseModel):
     backend: BackendKind = BackendKind.LOCAL
     api_url: HttpUrl | None = None
     api_key: SecretStr | None = Field(default=None, min_length=32)
+    export_directory: Path | None = None
 
 
 class ResolvedCliConfig(BaseModel):
@@ -99,6 +100,11 @@ def save_cli_config(config: SavedCliConfig, path: Path | None = None) -> Path:
         "backend": config.backend.value,
         "api_url": str(config.api_url) if config.api_url is not None else None,
         "api_key": api_key,
+        "export_directory": (
+            str(config.export_directory)
+            if config.export_directory is not None
+            else None
+        ),
     }
     try:
         temporary.write_text(

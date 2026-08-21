@@ -22,3 +22,14 @@ Store unresolved session findings in this file. Move each finding to its permane
 | 15 | Update Read the Docs content for all browser interface requirements. | done |
 | 16 | Replace the Settings text button with a Unicode icon beside Notifications. | done |
 | 17 | Add Brave and Zen browser models, profile discovery, and native import behavior. | done |
+| 18 | Add HTML and JSON bookmark exporters with saved destination configuration. | done |
+| 19 | Add interactive export prompts, overwrite confirmation, non-interactive mode, and force mode. | done |
+| 20 | Document and verify export workflows, including a read-only import from the installed Zen profile. | done |
+| 21 | Audit CLI actions and add clear success, cancellation, and failure feedback. | done |
+| 22 | Add a global --debug switch with debug, warning, and checkpoint messages on stderr. | done |
+| 23 | Show readable text for list and get by default, with JSON available through --json. | done |
+| 26 | Make mutating CLI actions safely repeatable and document their idempotency behavior. | done |
+| 27 | Define CLI error states and add graceful degradation for expected failures. | done |
+| 28 | Review and update the Twelve-Factor compliance audit for all session changes. | done |
+| 24 | Audit and update Read the Docs, man pages, README, CONTEXT, test plans, and handoff notes. | done |
+| 25 | Run full checks, review the combined change, commit it, and push the branch. | done |

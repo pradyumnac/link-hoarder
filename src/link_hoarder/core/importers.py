@@ -1,7 +1,6 @@
 """Native browser profile importers."""
 
 import os
-import shutil
 import sqlite3
 import tempfile
 from datetime import UTC, datetime, timedelta
@@ -409,11 +408,12 @@ def _walk_chrome(
 def _read_firefox(browser: Browser, path: Path) -> ProfileReadResult:
     with tempfile.TemporaryDirectory() as temporary:
         copied = Path(temporary) / "places.sqlite"
-        shutil.copy2(path, copied)
-        wal = path.with_name(f"{path.name}-wal")
-        if wal.exists():
-            shutil.copy2(wal, copied.with_name(f"{copied.name}-wal"))
-        with sqlite3.connect(copied) as connection:
+        source_uri = f"{path.expanduser().resolve().as_uri()}?mode=ro"
+        with (
+            sqlite3.connect(source_uri, uri=True) as source,
+            sqlite3.connect(copied) as connection,
+        ):
+            source.backup(connection)
             rows = connection.execute(
                 """
                 SELECT p.url, COALESCE(b.title, p.title, p.url), f.title

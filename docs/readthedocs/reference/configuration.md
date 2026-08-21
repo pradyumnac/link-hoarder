@@ -14,8 +14,11 @@ The CLI selects its backend in this order:
 
 The setup task writes `config.json` in the platform configuration directory.
 On Linux, the default path is `~/.config/link-hoarder/config.json`.
-The file contains the backend, API URL, and API key.
+The file contains the backend, API URL, API key, and last successful export directory.
 The setup task sets user-only permissions on this file.
+
+The `export` command suggests the saved export directory in interactive mode.
+An explicit directory can override the saved value.
 
 ## Environment variables
 

@@ -39,5 +39,7 @@ The file must use the Netscape bookmark HTML format.
 Brave, Chrome, Chromium, Edge, Firefox, and Zen use this format for bookmark exports.
 
 The importers skip a URL that already exists in the Link Hoarder database.
+Firefox and Zen imports use a read-only SQLite snapshot.
+A bookmark committed after the snapshot appears during the next import.
 Each command writes import warnings to standard error. The JSON result also contains
 the warnings. Valid bookmarks continue to import after an entry failure.

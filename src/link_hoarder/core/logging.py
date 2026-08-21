@@ -2,16 +2,17 @@
 
 import logging
 import sys
+from typing import TextIO
 
 import structlog
 
 
-def configure_logging(level: str) -> None:
+def configure_logging(level: str, stream: TextIO | None = None) -> None:
     """Configure JSON logs for the application."""
     logging.basicConfig(
         format="%(message)s",
         level=level.upper(),
-        stream=sys.stdout,
+        stream=stream or sys.stdout,
         force=True,
     )
     structlog.configure(

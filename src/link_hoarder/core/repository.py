@@ -137,6 +137,8 @@ class BookmarkRepository:
             if record is None:
                 return None
             values = update.model_dump(exclude_unset=True)
+            if all(getattr(record, key) == value for key, value in values.items()):
+                return self._read(record)
             record.sqlmodel_update(values)
             record.updated_at = datetime.now(UTC)
             session.add(record)

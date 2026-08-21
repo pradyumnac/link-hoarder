@@ -12,8 +12,9 @@ Link Hoarder stores browser bookmarks in SQLite. Use it through the CLI, the ver
 
 - Manage bookmarks, folders, and tags.
 - Search titles, URLs, and tags.
-- Import native Chrome, Chromium, Edge, and Firefox profiles through the CLI.
+- Import native Brave, Chrome, Chromium, Edge, Firefox, and Zen profiles through the CLI.
 - Import standard bookmark HTML exports through the CLI or web interface.
+- Export bookmarks to browser-compatible HTML and structured JSON files.
 - Preserve JavaScript bookmarklets and add the `bookmarklet` tag automatically.
 - Use the same CLI commands with local SQLite or a remote HTTP API.
 - Run a local web stack with automatic API-key provisioning.
@@ -97,6 +98,15 @@ Use repeated `--tag` options to add multiple tags.
 The default backend is local SQLite.
 Use `link-hoarder --backend api COMMAND` to override the backend for one command.
 
+`list` and `get` show readable text by default.
+Add `--json` to either command for structured output.
+Use the global `--debug` switch before a command to write diagnostic checkpoints to standard error.
+
+Matching repeated creates return the existing bookmark.
+Repeated deletes succeed when the bookmark is already absent.
+A URL conflict with different metadata returns exit code 1.
+Invalid input, configuration, storage, or connection failures return exit code 2.
+
 ### Import native profiles
 
 Discover local profiles and import them:
@@ -126,6 +136,18 @@ link-hoarder import-file /path/to/bookmarks.html
 ```
 
 Imports skip existing URLs. The JSON result reports imported, skipped, and invalid entries.
+
+### Export bookmarks
+
+Run an interactive export:
+
+```console
+link-hoarder export
+```
+
+The command writes `html/bookmarks.html` and `json/bookmarks.json` under the selected directory.
+It saves the directory and suggests it during the next export.
+Use `--no-interactive` for scripts and `--force` to overwrite existing export files.
 
 ## Web interface
 
@@ -175,6 +197,7 @@ See the [API reference](docs/readthedocs/reference/api.md) and committed [`docs/
 - [Quick start](docs/readthedocs/tutorials/quick-start.md)
 - [CLI reference](docs/readthedocs/reference/cli.md)
 - [CLI backend guide](docs/readthedocs/how-to/configure-cli-backend.md)
+- [Export guide](docs/readthedocs/how-to/export-bookmarks.md)
 - [Import guide](docs/readthedocs/how-to/import-browser-profiles.md)
 - [Configuration reference](docs/readthedocs/reference/configuration.md)
 - [Architecture](docs/readthedocs/explanation/architecture.md)

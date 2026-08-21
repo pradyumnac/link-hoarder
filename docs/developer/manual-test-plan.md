@@ -20,14 +20,17 @@ $env:LINK_HOARDER_DATABASE_PATH = "$PWD\.manual-test.db"
 uv run link-hoarder --help
 ```
 
-Confirm that help lists `create`, `list`, `get`, `update`, `delete`, `import-browser`, `import-file`, and `api`.
+Confirm that help lists `create`, `list`, `get`, `update`, `delete`, `import-browser`, `import-file`, `export`, and `api`.
+Confirm that global help lists `--debug`.
 
 ## 2. Test CLI CRUD
 
 ```console
 uv run link-hoarder create https://example.com --title Example --tag test
 uv run link-hoarder list
+uv run link-hoarder list --json
 uv run link-hoarder get 1
+uv run link-hoarder get 1 --json
 uv run link-hoarder update 1 --title Updated
 uv run link-hoarder list --query Updated
 uv run link-hoarder delete 1
@@ -37,10 +40,20 @@ uv run link-hoarder get 1
 Expected results:
 
 - `create` prints one bookmark with an identifier.
-- `list` shows the bookmark.
+- A matching repeated `create` returns the same identifier.
+- A conflicting repeated `create` returns exit code 1.
+- `list` and `get` show readable text by default and JSON with `--json`.
 - `update` changes the title.
-- `delete` succeeds.
+- `delete` succeeds when repeated after the bookmark is absent.
 - The final `get` returns a not-found error.
+
+Run one command with global debug mode:
+
+```console
+uv run link-hoarder --debug list
+```
+
+Confirm that checkpoints use standard error and bookmark output uses standard output.
 
 ## 3. Test browser import
 
@@ -63,7 +76,34 @@ uv run link-hoarder import-file /path/to/bookmarks.html
 
 Run each import command a second time. The second run must report skipped URLs.
 
-## 4. Test the API
+For a live Zen check, set `LINK_HOARDER_DATABASE_PATH` to a temporary database.
+Import the discovered Zen `places.sqlite` file while Zen is open.
+Create a synthetic Link Hoarder bookmark after the import.
+Confirm that the synthetic bookmark does not change the Zen profile.
+A Zen bookmark committed after the import snapshot appears during the next import.
+
+## 4. Test CLI export
+
+Run an interactive export and enter a temporary directory.
+
+```console
+uv run link-hoarder export
+```
+
+Confirm that the directory contains `html/bookmarks.html` and `json/bookmarks.json`.
+Run the command again and decline the overwrite confirmation.
+Confirm that both files remain unchanged.
+
+Run a forced non-interactive export:
+
+```console
+uv run link-hoarder export /path/to/temporary/export --no-interactive --force
+```
+
+Confirm that the command overwrites both files and saves the selected directory.
+Run another interactive export and confirm that the saved directory is the prompt default.
+
+## 5. Test the API
 
 Set an API key and use a separate database.
 
@@ -94,7 +134,7 @@ Test these cases:
 5. Upload an invalid bookmark HTML export. Confirm a structured import warning.
 6. Confirm that `/docs` and `/openapi.json` return HTTP 404.
 
-## 5. Test responsive browser layouts
+## 6. Test responsive browser layouts
 
 Start the web interface and use browser responsive-design tools.
 
@@ -113,7 +153,7 @@ Confirm that text lines remain readable on wide layouts.
 Confirm that all controls remain visible and usable.
 Confirm that the page does not have horizontal scrolling.
 
-## 6. Build the package
+## 7. Build the package
 
 ```console
 uv build
@@ -121,7 +161,7 @@ uv build
 
 Confirm that `dist/` contains a wheel and a source distribution. Git ignores both files.
 
-## 7. Install and test the wheel
+## 8. Install and test the wheel
 
 Install the local wheel into the project virtual environment:
 
@@ -146,7 +186,7 @@ Confirm the package is in the project virtual environment:
 uv pip show --python .venv link-hoarder
 ```
 
-## 8. Remove test data
+## 9. Remove test data
 
 Linux or macOS:
 
