@@ -1,0 +1,17 @@
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: stack/Dockerfile
+    image: link-hoarder:local
+    environment:
+      LINK_HOARDER_API_KEY: ${LINK_HOARDER_API_KEY:?Set LINK_HOARDER_API_KEY}
+      LINK_HOARDER_LOG_LEVEL: ${LINK_HOARDER_LOG_LEVEL:-INFO}
+    ports:
+      - "127.0.0.1:${LINK_HOARDER_PORT:-8000}:8000"
+    volumes:
+      - link-hoarder-data:/data
+    restart: unless-stopped
+
+volumes:
+  link-hoarder-data:

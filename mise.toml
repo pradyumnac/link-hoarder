@@ -1,0 +1,73 @@
+# Tool versions and project tasks.
+[tools]
+python = "3.14"
+uv = "latest"
+git-cliff = "latest"
+
+[env]
+_.python.venv = { path = ".venv", create = true }
+
+[tasks.install]
+description = "Sync all locked dependencies"
+run = "uv sync --all-extras"
+
+[tasks.format]
+description = "Format Python files"
+run = "uv run ruff format ."
+
+[tasks.lint]
+description = "Check formatting and lint rules"
+run = "uv run ruff format --check . && uv run ruff check ."
+
+[tasks.typecheck]
+description = "Type-check all Python files"
+run = "uv run mypy src tests"
+
+[tasks.test]
+description = "Run tests with coverage"
+run = "uv run pytest --cov=link_hoarder --cov-report=term-missing --cov-fail-under=70"
+
+[tasks.check]
+description = "Run every local gate"
+depends = ["lint", "typecheck", "test"]
+
+[tasks.hooks]
+description = "Install Git pre-commit hooks"
+run = "uv run pre-commit install"
+
+[tasks.build]
+description = "Build the wheel and source distribution"
+run = "uv build"
+
+[tasks.install-local]
+description = "Install the current wheel with uv"
+depends = ["build"]
+run = "uv tool install --force dist/link_hoarder-0.1.0-py3-none-any.whl"
+
+[tasks.serve]
+description = "Run the authenticated API"
+run = "uv run link-hoarder api"
+
+[tasks.stack-up]
+description = "Build and start the Docker stack"
+run = "docker compose --env-file stack/.env -f stack/compose.yaml up --build -d"
+
+[tasks.stack-down]
+description = "Stop the Docker stack"
+run = "docker compose --env-file stack/.env -f stack/compose.yaml down"
+
+[tasks.changelog]
+description = "Generate the changelog from Conventional Commits"
+run = "git-cliff --output CHANGELOG.md"
+
+[tasks.skills]
+description = "Discover and install official library skills as copies"
+run = "uvx library-skills --all --copy --tool-skill"
+
+[tasks.skills-list]
+description = "List official library skills"
+run = "uvx library-skills list"
+
+[tasks.release-check]
+description = "Verify checks and build release files"
+depends = ["check", "build"]

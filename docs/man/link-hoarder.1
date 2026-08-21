@@ -1,0 +1,50 @@
+.TH LINK-HOARDER 1 "" "link-hoarder 0.1.0" "User Commands"
+.SH NAME
+link-hoarder \- manage bookmarks and import browser profiles
+.SH SYNOPSIS
+.B link-hoarder
+.I COMMAND
+.RI [ OPTIONS ]
+.SH DESCRIPTION
+Link Hoarder stores bookmarks in SQLite. Commands return bookmark data as JSON.
+.SH COMMANDS
+.TP
+.B create URL --title TITLE
+Create a bookmark. Use --folder and repeated --tag options for metadata.
+.TP
+.B list [--query TEXT] [--limit NUMBER] [--offset NUMBER]
+List bookmarks. Filter titles and URLs with --query.
+.TP
+.B get ID
+Get one bookmark.
+.TP
+.B update ID [--url URL] [--title TITLE] [--folder FOLDER] [--tag TAG]
+Update supplied bookmark fields.
+.TP
+.B delete ID
+Delete one bookmark.
+.TP
+.B import-browser BROWSER [--profile FILE]
+Import chrome, chromium, edge, or firefox profile data. Omit --profile to discover profiles.
+.TP
+.B api [--host HOST] [--port PORT]
+Run the FastAPI server. Set LINK_HOARDER_API_KEY first.
+.SH ENVIRONMENT
+.TP
+.B LINK_HOARDER_DATABASE_PATH
+SQLite database path. The default uses the platform-native user data directory.
+.TP
+.B LINK_HOARDER_API_KEY
+API key required by the server in the X-API-Key request header.
+.TP
+.B LINK_HOARDER_LOG_LEVEL
+Structured log level. The default is INFO.
+.SH FILES
+.TP
+.I docs/readthedocs/reference/configuration.md
+Complete configuration reference.
+.SH EXIT STATUS
+Zero indicates success. One indicates a missing bookmark. Two indicates missing server configuration.
+.SH SEE ALSO
+.BR uvx (1),
+.BR docker-compose (1)

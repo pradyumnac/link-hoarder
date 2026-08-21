@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Environments — uv creates .venv; mise activates it.
+.venv/
+
+# Tool caches
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local application data and secrets
+*.db
+*.db-wal
+*.db-shm
+stack/.env
+
+# OS
+.DS_Store

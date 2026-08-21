@@ -1,0 +1,50 @@
+# Written by pradyumnac-python-bootstrap. Records what this project chose.
+# Skills read this file to check the project against its own intent.
+
+[project]
+type = "app"
+python_floor = "3.14"
+python_floor_reason = "The app controls its runtime through mise and uv."
+
+[tooling]
+task_runner = "mise"
+build_backend = "uv_build"
+pre_commit = true
+remote_ci = false
+
+[practice]
+methodology = "todo-md-lite"
+licence = "MIT"
+pypi = true
+xdg_paths = true
+git_cliff = true
+pydantic_edges = true
+
+[meta]
+bootstrapped = "2026-08-21"
+skill_version = "1"
+
+[files]
+# Every file this skill created, with the UTC timestamp of creation.
+# The script appends here; it never rewrites an entry. A path absent from
+# this table was written by hand, and compliance checks leave it alone.
+".gitignore" = "2026-08-21T07:11:21Z"
+".gitattributes" = "2026-08-21T07:11:21Z"
+".editorconfig" = "2026-08-21T07:11:21Z"
+".markdownlint-cli2.jsonc" = "2026-08-21T07:11:21Z"
+"mise.toml" = "2026-08-21T07:11:21Z"
+"README.md" = "2026-08-21T07:11:21Z"
+"AGENTS.md" = "2026-08-21T07:11:21Z"
+".methodology.toml" = "2026-08-21T07:11:21Z"
+"pyproject.toml" = "2026-08-21T07:11:21Z"
+"CONTEXT.md" = "2026-08-21T07:11:21Z"
+"src/link_hoarder/__init__.py" = "2026-08-21T07:11:21Z"
+"src/link_hoarder/__main__.py" = "2026-08-21T07:11:21Z"
+"tests/test_smoke.py" = "2026-08-21T07:11:21Z"
+"docs/adr/.gitkeep" = "2026-08-21T07:11:21Z"
+"docs/reference/.gitkeep" = "2026-08-21T07:11:21Z"
+"docs/tutorials/.gitkeep" = "2026-08-21T07:11:21Z"
+"docs/how-to/.gitkeep" = "2026-08-21T07:11:21Z"
+"docs/explanation/.gitkeep" = "2026-08-21T07:11:21Z"
+".pre-commit-config.yaml" = "2026-08-21T07:11:21Z"
+"cliff.toml" = "2026-08-21T07:11:21Z"
