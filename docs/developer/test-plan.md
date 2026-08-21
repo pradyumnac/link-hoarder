@@ -3,7 +3,7 @@
 ## Primary flows
 
 - Create, read, list, update, and delete a bookmark.
-- Import bookmarks from Chromium and Firefox profile files through the CLI.
+- Import bookmarks from Chromium, Firefox, Brave, and Zen profile files through the CLI.
 - Import a Netscape bookmark HTML export through the CLI and API.
 - Use CRUD and import features through the local SQLite and HTTP CLI backends.
 - Save each setup mode and install all user wrapper scripts.
@@ -24,7 +24,7 @@
 
 - Filter the bookmark list.
 - Import a profile that contains an existing URL.
-- Select an explicit browser profile path.
+- Select an explicit browser profile path for each supported browser family.
 - Import an HTML export that contains an existing URL.
 - Override the saved backend with an environment variable or `--backend`.
 - Configure an existing remote API instead of a local API.
@@ -45,6 +45,7 @@
 ## Edge flows
 
 - Import nested Chromium and HTML export folders.
+- Discover Brave and Zen profiles in standard Windows and Linux directories.
 - Import a Firefox bookmark without a folder title.
 - Return an empty list when no bookmarks exist.
 - Encode a full bookmark URL in an API lookup query.
@@ -66,7 +67,7 @@
 - Reject an invalid bookmark URL.
 - Return a not-found result for an unknown identifier.
 - Reject API requests with a missing or invalid API key.
-- Warn about a missing or malformed browser profile or HTML export.
+- Warn about a missing or malformed Brave, Zen, or other browser profile.
 - Reject an incomplete or malformed saved API configuration.
 - Report API authentication, connection, and response failures without a traceback.
 - Report a Docker Compose startup failure.

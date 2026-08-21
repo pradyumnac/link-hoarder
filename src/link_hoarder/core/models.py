@@ -26,21 +26,25 @@ def _validate_bookmark_url(value: str) -> str:
 class Browser(StrEnum):
     """Supported browser families."""
 
+    BRAVE = "brave"
     CHROME = "chrome"
     CHROMIUM = "chromium"
     EDGE = "edge"
     FIREFOX = "firefox"
+    ZEN = "zen"
 
 
 class BookmarkSource(StrEnum):
     """Bookmark origin."""
 
     MANUAL = "manual"
+    BRAVE = "brave"
     CHROME = "chrome"
     CHROMIUM = "chromium"
     EDGE = "edge"
     FIREFOX = "firefox"
     HTML = "html"
+    ZEN = "zen"
 
 
 class BookmarkFields(SQLModel):

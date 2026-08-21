@@ -21,3 +21,4 @@ Store unresolved session findings in this file. Move each finding to its permane
 | 14 | Move bookmark HTML import controls into an accessible modal dialog. | done |
 | 15 | Update Read the Docs content for all browser interface requirements. | done |
 | 16 | Replace the Settings text button with a Unicode icon beside Notifications. | done |
+| 17 | Add Brave and Zen browser models, profile discovery, and native import behavior. | done |

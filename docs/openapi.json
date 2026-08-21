@@ -146,11 +146,13 @@
         "description": "Bookmark origin.",
         "enum": [
           "manual",
+          "brave",
           "chrome",
           "chromium",
           "edge",
           "firefox",
-          "html"
+          "html",
+          "zen"
         ],
         "title": "BookmarkSource",
         "type": "string"

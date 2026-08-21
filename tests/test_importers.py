@@ -22,7 +22,13 @@ from link_hoarder.core.repository import BookmarkRepository, BookmarkStorageErro
     ("browser", "environment", "relative"),
     [
         (Browser.CHROME, "LOCALAPPDATA", "Google/Chrome/User Data/Default/Bookmarks"),
+        (
+            Browser.BRAVE,
+            "LOCALAPPDATA",
+            "BraveSoftware/Brave-Browser/User Data/Default/Bookmarks",
+        ),
         (Browser.FIREFOX, "APPDATA", "Mozilla/Firefox/Profiles/default/places.sqlite"),
+        (Browser.ZEN, "APPDATA", "zen/Profiles/default/places.sqlite"),
     ],
 )
 def test_discover_windows_profiles(
@@ -41,8 +47,41 @@ def test_discover_windows_profiles(
     assert profile.resolve() in discover_profiles(browser)
 
 
-def test_read_chromium_nested_bookmark(tmp_path: Path) -> None:
-    """Given a nested Chromium file, the importer keeps the folder path."""
+@pytest.mark.parametrize(
+    ("browser", "relative"),
+    [
+        (
+            Browser.BRAVE,
+            ".config/BraveSoftware/Brave-Browser/Default/Bookmarks",
+        ),
+        (Browser.ZEN, ".zen/default/places.sqlite"),
+    ],
+)
+def test_discover_linux_profiles(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    browser: Browser,
+    relative: str,
+) -> None:
+    """Given Linux home paths, discovery finds Brave and Zen profile files."""
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
+    monkeypatch.delenv("LOCALAPPDATA", raising=False)
+    monkeypatch.delenv("APPDATA", raising=False)
+    profile = tmp_path / relative
+    profile.parent.mkdir(parents=True)
+    profile.touch()
+
+    assert profile.resolve() in discover_profiles(browser)
+
+
+@pytest.mark.parametrize(
+    ("browser", "source"),
+    [(Browser.CHROME, "chrome"), (Browser.BRAVE, "brave")],
+)
+def test_read_chromium_nested_bookmark(
+    tmp_path: Path, browser: Browser, source: str
+) -> None:
+    """Given a nested Chromium file, the importer keeps its source and folder."""
     profile = tmp_path / "Bookmarks"
     profile.write_text(
         json.dumps(
@@ -71,9 +110,10 @@ def test_read_chromium_nested_bookmark(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    result = read_profile(Browser.CHROME, profile)
+    result = read_profile(browser, profile)
 
     assert len(result.bookmarks) == 1
+    assert result.bookmarks[0].source == source
     assert result.bookmarks[0].folder == "Bookmarks bar/Python"
     assert result.bookmarks[0].url == "https://python.org/"
     assert result.warnings == []
@@ -155,8 +195,12 @@ def test_import_html_export_preserves_folders_and_bookmarklets(
     assert second.skipped == 2
 
 
-def test_read_firefox_bookmark(tmp_path: Path) -> None:
-    """Given a Firefox places database, the importer reads HTTP bookmarks."""
+@pytest.mark.parametrize(
+    ("browser", "source"),
+    [(Browser.FIREFOX, "firefox"), (Browser.ZEN, "zen")],
+)
+def test_read_firefox_bookmark(tmp_path: Path, browser: Browser, source: str) -> None:
+    """Given a Firefox-family database, the importer keeps its browser source."""
     profile = tmp_path / "places.sqlite"
     with sqlite3.connect(profile) as connection:
         connection.executescript(
@@ -171,9 +215,10 @@ def test_read_firefox_bookmark(tmp_path: Path) -> None:
             """
         )
 
-    result = read_profile(Browser.FIREFOX, profile)
+    result = read_profile(browser, profile)
 
     assert len(result.bookmarks) == 1
+    assert result.bookmarks[0].source == source
     assert result.bookmarks[0].title == "Example"
     assert result.bookmarks[0].folder == "Toolbar"
 

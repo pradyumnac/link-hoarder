@@ -102,22 +102,24 @@ Use `link-hoarder --backend api COMMAND` to override the backend for one command
 Discover local profiles and import them:
 
 ```console
+link-hoarder import-browser brave
 link-hoarder import-browser chrome
 link-hoarder import-browser chromium
 link-hoarder import-browser edge
 link-hoarder import-browser firefox
+link-hoarder import-browser zen
 ```
 
 Pass an explicit native profile file when automatic discovery is not available:
 
 ```console
-link-hoarder import-browser chromium --profile /path/to/Brave-Browser/Default/Bookmarks
-link-hoarder import-browser firefox --profile /path/to/places.sqlite
+link-hoarder import-browser brave --profile /path/to/Brave-Browser/Default/Bookmarks
+link-hoarder import-browser zen --profile /path/to/places.sqlite
 ```
 
 ### Import an exported file
 
-Chrome, Chromium, Edge, Firefox, and Brave can export the Netscape bookmark HTML format.
+Brave, Chrome, Chromium, Edge, Firefox, and Zen can export the Netscape bookmark HTML format.
 
 ```console
 link-hoarder import-file /path/to/bookmarks.html

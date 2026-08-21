@@ -91,6 +91,15 @@ def test_cli_update_delete_and_import(
     assert deleted.exit_code == 0
 
 
+def test_cli_lists_brave_and_zen_import_choices() -> None:
+    """Given import help, the CLI lists Brave and Zen as browser choices."""
+    result = runner.invoke(app, ["import-browser", "--help"])
+
+    assert result.exit_code == 0
+    assert "brave" in result.stdout
+    assert "zen" in result.stdout
+
+
 def test_cli_imports_bookmark_html_export(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

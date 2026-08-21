@@ -134,6 +134,11 @@ def discover_profiles(browser: Browser) -> list[Path]:
     roaming = Path(os.environ.get("APPDATA", home))
 
     roots: dict[Browser, list[Path]] = {
+        Browser.BRAVE: [
+            home / ".config/BraveSoftware/Brave-Browser",
+            home / ".var/app/com.brave.Browser/config/BraveSoftware/Brave-Browser",
+            local / "BraveSoftware/Brave-Browser/User Data",
+        ],
         Browser.CHROME: [
             home / ".config/google-chrome",
             local / "Google/Chrome/User Data",
@@ -147,8 +152,14 @@ def discover_profiles(browser: Browser) -> list[Path]:
             home / ".mozilla/firefox",
             roaming / "Mozilla/Firefox/Profiles",
         ],
+        Browser.ZEN: [
+            home / ".zen",
+            home / ".var/app/app.zen_browser.zen/.zen",
+            roaming / "zen/Profiles",
+        ],
     }
-    filename = "places.sqlite" if browser is Browser.FIREFOX else "Bookmarks"
+    firefox_family = {Browser.FIREFOX, Browser.ZEN}
+    filename = "places.sqlite" if browser in firefox_family else "Bookmarks"
     found = {
         path.resolve()
         for root in roots[browser]
@@ -161,8 +172,8 @@ def discover_profiles(browser: Browser) -> list[Path]:
 
 def read_profile(browser: Browser, path: Path) -> ProfileReadResult:
     """Read bookmarks and entry warnings from one browser data file."""
-    if browser is Browser.FIREFOX:
-        return _read_firefox(path)
+    if browser in {Browser.FIREFOX, Browser.ZEN}:
+        return _read_firefox(browser, path)
     return _read_chromium(browser, path)
 
 
@@ -395,7 +406,7 @@ def _walk_chrome(
         _walk_chrome(child, source, next_parents, profile, result)
 
 
-def _read_firefox(path: Path) -> ProfileReadResult:
+def _read_firefox(browser: Browser, path: Path) -> ProfileReadResult:
     with tempfile.TemporaryDirectory() as temporary:
         copied = Path(temporary) / "places.sqlite"
         shutil.copy2(path, copied)
@@ -422,7 +433,7 @@ def _read_firefox(path: Path) -> ProfileReadResult:
                 url=cast(str, row[0]),
                 title=title,
                 folder=cast(str | None, row[2]),
-                source=BookmarkSource.FIREFOX,
+                source=BookmarkSource(browser.value),
             )
         except ValidationError:
             result.warnings.append(

@@ -49,8 +49,10 @@ Close the browser before you import its profile.
 Use an explicit profile file when you do not want to change the real profile:
 
 ```console
+uv run link-hoarder import-browser brave --profile /path/to/Bookmarks
 uv run link-hoarder import-browser chrome --profile /path/to/Bookmarks
 uv run link-hoarder import-browser firefox --profile /path/to/places.sqlite
+uv run link-hoarder import-browser zen --profile /path/to/places.sqlite
 ```
 
 Import a Netscape bookmark HTML export:

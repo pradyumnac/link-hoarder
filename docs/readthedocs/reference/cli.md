@@ -12,7 +12,7 @@ bookmarklet.
 | `get` | Get one bookmark. |
 | `update` | Update supplied bookmark fields. |
 | `delete` | Delete one bookmark. |
-| `import-browser` | Import native browser profile files. |
+| `import-browser` | Import Brave, Chrome, Chromium, Edge, Firefox, or Zen profile files. |
 | `import-file` | Import a Netscape bookmark HTML export. |
 | `config` | Show saved backend configuration without secrets. |
 | `api` | Run the HTTP API. |

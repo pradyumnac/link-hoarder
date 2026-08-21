@@ -159,7 +159,7 @@ export interface components {
          * @description Bookmark origin.
          * @enum {string}
          */
-        BookmarkSource: "manual" | "chrome" | "chromium" | "edge" | "firefox" | "html";
+        BookmarkSource: "manual" | "brave" | "chrome" | "chromium" | "edge" | "firefox" | "html" | "zen";
         /**
          * BookmarkUpdate
          * @description Partial bookmark update input.
