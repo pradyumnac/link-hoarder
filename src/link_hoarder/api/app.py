@@ -2,7 +2,8 @@
 
 import secrets
 import tempfile
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated
 
@@ -71,6 +72,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 headers={"WWW-Authenticate": "APIKey"},
             )
 
+    @asynccontextmanager
+    async def lifespan(application: FastAPI) -> AsyncIterator[None]:
+        del application
+        try:
+            yield
+        finally:
+            repository.close()
+
     authorized = [Depends(require_api_key)]
     api = FastAPI(
         title="Link Hoarder API",
@@ -78,6 +87,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         docs_url=None,
         redoc_url=None,
         openapi_url=None,
+        lifespan=lifespan,
     )
     router = APIRouter(prefix=_API_PREFIX, dependencies=authorized)
 

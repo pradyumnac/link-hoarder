@@ -10,6 +10,7 @@ from pydantic import SecretStr, ValidationError
 from link_hoarder.api.app import create_app
 from link_hoarder.api.openapi import contract_json
 from link_hoarder.core.config import Settings
+from link_hoarder.core.repository import BookmarkRepository
 
 _API_PREFIX = "/api/v1"
 _API_KEY_VALUE = "test-key-value-with-at-least-32-characters"
@@ -33,6 +34,26 @@ def test_settings_reject_short_api_key() -> None:
     """Given a short API key, settings reject insecure authentication data."""
     with pytest.raises(ValidationError):
         Settings(api_key=SecretStr("short-key"))
+
+
+def test_api_closes_repository_during_shutdown(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Given an application shutdown, the API closes its database engine."""
+    closed = False
+    original_close = BookmarkRepository.close
+
+    def record_close(repository: BookmarkRepository) -> None:
+        nonlocal closed
+        closed = True
+        original_close(repository)
+
+    monkeypatch.setattr(BookmarkRepository, "close", record_close)
+
+    with _client(tmp_path) as client:
+        assert client.get("/health", headers=_HEADERS).status_code == 200
+
+    assert closed
 
 
 def test_api_requires_key(tmp_path: Path) -> None:

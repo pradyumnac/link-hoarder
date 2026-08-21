@@ -1,13 +1,19 @@
 """Structured logging configuration."""
 
 import logging
+import sys
 
 import structlog
 
 
 def configure_logging(level: str) -> None:
     """Configure JSON logs for the application."""
-    logging.basicConfig(format="%(message)s", level=level.upper())
+    logging.basicConfig(
+        format="%(message)s",
+        level=level.upper(),
+        stream=sys.stdout,
+        force=True,
+    )
     structlog.configure(
         processors=[
             structlog.contextvars.merge_contextvars,

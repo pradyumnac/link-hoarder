@@ -19,4 +19,4 @@ VOLUME ["/data"]
 EXPOSE 8000
 
 ENTRYPOINT ["/usr/local/bin/link-hoarder-api-entrypoint"]
-CMD ["uv", "run", "--no-sync", "link-hoarder", "api", "--host", "0.0.0.0"]
+CMD [".venv/bin/link-hoarder", "api", "--host", "0.0.0.0"]

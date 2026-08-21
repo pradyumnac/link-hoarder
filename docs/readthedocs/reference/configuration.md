@@ -1,6 +1,8 @@
 # Configuration reference
 
 Link Hoarder reads environment variables with the `LINK_HOARDER_` prefix.
+The application does not read `.env` files. Docker Compose can read `stack/.env`
+and pass its values through the environment.
 
 | Variable | Type | Default | Purpose |
 | --- | --- | --- | --- |

@@ -11,3 +11,4 @@ SQLModel combines Pydantic validation with the object-relational mapping layer.
 The API uses one configured key. This control fits a personal service behind a trusted network or reverse proxy.
 
 See [ADR-0001](../../adr/0001-application-architecture.md) for the decision record.
+See the [Twelve-Factor audit](../../developer/twelve-factor-audit.md) for runtime compliance and exceptions.

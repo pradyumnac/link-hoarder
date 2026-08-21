@@ -4,6 +4,8 @@ services:
       context: ..
       dockerfile: stack/Dockerfile
     image: link-hoarder-api:local
+    init: true
+    stop_grace_period: 10s
     environment:
       LINK_HOARDER_API_KEY: ${LINK_HOARDER_API_KEY:-}
       LINK_HOARDER_LOG_LEVEL: ${LINK_HOARDER_LOG_LEVEL:-INFO}
@@ -29,6 +31,8 @@ services:
       context: ..
       dockerfile: frontend/Dockerfile
     image: link-hoarder-frontend:local
+    init: true
+    stop_grace_period: 10s
     depends_on:
       api:
         condition: service_healthy

@@ -17,7 +17,6 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="LINK_HOARDER_",
-        env_file=".env",
         extra="ignore",
     )
 
