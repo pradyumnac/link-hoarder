@@ -9,7 +9,7 @@ mise run stack-up
 ## Search for bookmarks
 
 Type in the search box. The collection updates after you stop typing.
-Select the Search icon to run the search immediately.
+Press Enter to run the search immediately.
 
 Use the filters in the left pane to limit the collection by tag or bookmark type.
 Type in the folder field, then select a matching folder from the dropdown.
@@ -21,7 +21,9 @@ Use the breadcrumbs to return to a parent folder.
 Select **List** or **Gallery** in the left pane.
 The web interface saves your selected view as the default view.
 
-Select the Settings icon beside Notifications to change the page size.
+Select the Settings icon beside Notifications to change the page size, default view, or accent color.
+Select an accent color with the color picker. The browser saves the selection.
+Click outside Settings or Notifications to close the open panel.
 See the [configuration reference](../reference/configuration.md#browser-settings) for all browser settings.
 
 ## Add or edit a bookmark

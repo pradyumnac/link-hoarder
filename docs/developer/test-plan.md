@@ -16,16 +16,26 @@
 - Build the Python package and container image.
 - Show import summaries and warnings in the browser notification center.
 - Update browser search results after the user types a query.
+- Use bookmark search as the primary control in the compact application header.
+- Clear a non-empty search query with the clear-search control.
 - Open the browser import modal when the user selects the Import icon.
 - Change the bookmark collection from list view to gallery view.
 - Filter browser bookmarks by tag, bookmark type, and folder.
 - Navigate from the root folder to a nested folder in the browser interface.
 - Save the page size and default collection view in browser-local storage.
 - Open a modal dialog to create a bookmark.
-- Use Unicode icon buttons to add, search, import, edit, delete, close controls, and dismiss alerts.
+- Use purpose-specific SVG buttons to add a bookmark and import bookmark HTML.
+- Use labeled icon buttons to edit, delete, close controls, and dismiss alerts.
+- Select an accent color in Settings and save it in browser-local storage.
+- Match Add, Import, Settings, and Notifications backgrounds and use the accent color on hover.
+- Use the same SVG size and stroke width for all four header actions.
+- Show a transparent red outline trash icon for each bookmark.
+- Apply the selected accent to status messages and unread notification events.
+- Show the linked-chain SVG in the application header and browser favicon.
 - Type a folder query and select a matching folder from the dropdown.
 - Route a new browser session to the stable UI through the A/B proxy.
 - Select the staging UI from the top bar and keep that selection for the browser session.
+- Switch from Staging to Stable and load the Stable JavaScript and CSS assets.
 
 ## Alternate flows
 
@@ -43,18 +53,22 @@
 - Record failed create, update, delete, list, and import operations as notification events.
 - Record duplicate imports as warning events.
 - Reload all browser bookmarks after the user clears the search query.
+- Press `/` outside an editable control to focus bookmark search.
 - Close the browser import modal without starting an import.
 - Change the bookmark collection from gallery view to list view.
 - Clear each browser bookmark filter to show all search results.
 - Use folder breadcrumbs to return to a parent folder or all folders.
 - Restore saved browser settings when the user reloads the page.
+- Restore the saved accent color when the user reloads the page.
+- Close Settings or Events when the user clicks outside the open panel.
 - Open a populated modal dialog to edit a bookmark.
-- Provide an accessible label for each Unicode icon button.
-- Keep the Add, Search, and Import icons to the right of the search box.
+- Provide an accessible label for each icon button.
+- Keep the Add and Import icons to the right of the search box.
 - Keep the Settings icon beside the Notifications icon.
 - Clear the folder query to return to all folders.
 - Select the stable UI after the browser session uses the staging UI.
 - Select a UI with the `version` query parameter.
+- Set the variant cookie before the clean URL loads the selected UI assets.
 
 ## Edge flows
 
@@ -72,11 +86,17 @@
 - Mark all notification events as read and clear one event.
 - Show the import summary when an import has no warnings.
 - Send only the final browser search query when the user types multiple characters quickly.
+- Keep header controls present at 320 px and prevent overlap at desktop widths.
+- Show the Test UI selector in the compact header only when A/B mode is active.
 - Hide the browser import modal on initial load.
 - Keep all bookmark actions available in list and gallery views.
+- Keep the transparent outline trash icon in list and gallery views.
 - Combine tag, bookmark type, and folder filters.
 - Include direct and nested bookmarks when the user selects a parent folder.
 - Use default browser settings when browser-local storage has no saved settings.
+- Use green when browser-local storage has no saved accent color.
+- Keep themed status text readable with light and dark accent colors.
+- Keep Settings or Events open when the user interacts inside the panel.
 - Close a bookmark modal without saving its values.
 - Dismiss error and status messages independently.
 - Match folder queries without case sensitivity.
@@ -101,11 +121,15 @@
 - Report a Docker Compose startup failure.
 - Record an import attempt that has no selected file.
 - Show a notification event when a browser search request fails.
+- Do not move focus when the user presses `/` in an editable control.
+- Keep every compact-header icon accessible by name and keyboard focus.
 - Keep the browser import modal open when an import attempt has no selected file.
 - Keep one collection view selected when the user selects the active view again.
 - Disable filter choices when the loaded collection has no applicable values.
 - Hide child folder links when the selected folder has no child folders.
 - Reject malformed browser settings and report browser-local storage write failures.
+- Reject a malformed saved accent color and use green.
+- Keep error alerts red when the user changes the accent color.
 - Keep invalid bookmark form values in the open modal for correction.
 - Keep icon-only actions understandable when their visible text is not available.
 - Show an empty dropdown state when no folder matches the typed query.

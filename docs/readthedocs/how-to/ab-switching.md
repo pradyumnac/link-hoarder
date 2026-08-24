@@ -30,6 +30,7 @@ Both variants use the same API and bookmark database.
 
 Open `http://127.0.0.1:8080`. Use the **Test UI** control in the top bar.
 The proxy keeps the selection during the current browser session.
+The proxy sets the cookie, then redirects to a clean URL before it loads UI assets.
 
 You can also select a variant with a URL:
 
@@ -56,6 +57,12 @@ mise run ab-stage
 ```
 
 Switch between **Stable** and **Staging** in the top bar.
+Verify both selections and their assets:
+
+```console
+mise run ab-check
+```
+
 Do not compare data mutations because both variants use the same database.
 
 Reset staging when you reject the change:

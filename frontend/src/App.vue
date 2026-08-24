@@ -10,6 +10,7 @@ import {
   type Bookmark,
 } from "./api/client";
 
+const DEFAULT_ACCENT_COLOR = "#0d684d";
 const FETCH_SIZE = 1000;
 const PAGE_SIZE_OPTIONS = [10, 25, 50] as const;
 const SEARCH_DELAY_MS = 300;
@@ -22,6 +23,7 @@ type PageSize = (typeof PAGE_SIZE_OPTIONS)[number];
 type ViewMode = "gallery" | "list";
 
 interface BrowserSettings {
+  accentColor: string;
   defaultView: ViewMode;
   pageSize: PageSize;
 }
@@ -34,30 +36,53 @@ interface NotificationEvent {
   unread: boolean;
 }
 
-function isBrowserSettings(value: unknown): value is BrowserSettings {
+function parseBrowserSettings(value: unknown): BrowserSettings | null {
   if (typeof value !== "object" || value === null) {
-    return false;
+    return null;
   }
   const candidate = value as Record<string, unknown>;
-  return (
-    PAGE_SIZE_OPTIONS.some((option) => option === candidate.pageSize) &&
-    (candidate.defaultView === "gallery" || candidate.defaultView === "list")
-  );
+  if (
+    !PAGE_SIZE_OPTIONS.some((option) => option === candidate.pageSize) ||
+    (candidate.defaultView !== "gallery" && candidate.defaultView !== "list")
+  ) {
+    return null;
+  }
+  const accentColor =
+    typeof candidate.accentColor === "string" && /^#[0-9a-f]{6}$/i.test(candidate.accentColor)
+      ? candidate.accentColor.toLowerCase()
+      : DEFAULT_ACCENT_COLOR;
+  return {
+    accentColor,
+    defaultView: candidate.defaultView,
+    pageSize: candidate.pageSize as PageSize,
+  };
 }
 
 function loadBrowserSettings(): BrowserSettings {
   try {
     const stored = window.localStorage.getItem(SETTINGS_KEY);
     if (stored !== null) {
-      const candidate: unknown = JSON.parse(stored);
-      if (isBrowserSettings(candidate)) {
-        return candidate;
+      const settings = parseBrowserSettings(JSON.parse(stored) as unknown);
+      if (settings !== null) {
+        return settings;
       }
     }
   } catch {
     // Use defaults when browser-local storage is unavailable or malformed.
   }
-  return { defaultView: "list", pageSize: 10 };
+  return { accentColor: DEFAULT_ACCENT_COLOR, defaultView: "list", pageSize: 10 };
+}
+
+function applyAccentColor(accentColor: string): void {
+  const red = Number.parseInt(accentColor.slice(1, 3), 16);
+  const green = Number.parseInt(accentColor.slice(3, 5), 16);
+  const blue = Number.parseInt(accentColor.slice(5, 7), 16);
+  const brightness = (red * 299 + green * 587 + blue * 114) / 1000;
+  document.documentElement.style.setProperty("--accent", accentColor);
+  document.documentElement.style.setProperty(
+    "--accent-contrast",
+    brightness > 150 ? "#19332c" : "#ffffff",
+  );
 }
 
 function loadUiVariant(): UiVariant {
@@ -77,9 +102,11 @@ function variantUrl(variant: UiVariant): string {
 
 const abSwitchingEnabled = __AB_SWITCHING_ENABLED__;
 const initialSettings = loadBrowserSettings();
+applyAccentColor(initialSettings.accentColor);
 const bookmarks = ref<Bookmark[]>([]);
 const offset = ref(0);
 const query = ref("");
+const searchInput = ref<HTMLInputElement | null>(null);
 const selectedFolder = ref("");
 const folderInput = ref("");
 const folderComboboxOpen = ref(false);
@@ -97,6 +124,10 @@ const importFile = ref<File | null>(null);
 const importOpen = ref(false);
 const notificationOpen = ref(false);
 const settingsOpen = ref(false);
+const notificationButton = ref<HTMLButtonElement | null>(null);
+const notificationPanel = ref<HTMLElement | null>(null);
+const settingsButton = ref<HTMLButtonElement | null>(null);
+const settingsPanel = ref<HTMLElement | null>(null);
 const notificationEvents = ref<NotificationEvent[]>([]);
 const form = reactive({ folder: "", tags: "", title: "", url: "" });
 let nextLoadId = 1;
@@ -184,6 +215,11 @@ function persistSettings(): void {
 function updateSettings(): void {
   offset.value = 0;
   viewMode.value = settings.defaultView;
+  persistSettings();
+}
+
+function updateAccentColor(): void {
+  applyAccentColor(settings.accentColor);
   persistSettings();
 }
 
@@ -335,6 +371,60 @@ function scheduleSearch(): void {
   }, SEARCH_DELAY_MS);
 }
 
+function clearSearch(): void {
+  query.value = "";
+  void search();
+  searchInput.value?.focus();
+}
+
+function focusSearch(event: KeyboardEvent): void {
+  if (
+    event.key !== "/" ||
+    event.defaultPrevented ||
+    event.altKey ||
+    event.ctrlKey ||
+    event.metaKey
+  ) {
+    return;
+  }
+  const target = event.target;
+  if (
+    target instanceof HTMLElement &&
+    (target.matches("input, textarea, select") ||
+      target.isContentEditable ||
+      target.closest('[contenteditable]:not([contenteditable="false"])') !== null)
+  ) {
+    return;
+  }
+  const input = searchInput.value;
+  if (input === null || !input.isConnected) {
+    return;
+  }
+  event.preventDefault();
+  input.focus();
+}
+
+function dismissHeaderPanels(event: PointerEvent): void {
+  const target = event.target;
+  if (!(target instanceof Node)) {
+    return;
+  }
+  if (
+    settingsOpen.value &&
+    !settingsButton.value?.contains(target) &&
+    !settingsPanel.value?.contains(target)
+  ) {
+    settingsOpen.value = false;
+  }
+  if (
+    notificationOpen.value &&
+    !notificationButton.value?.contains(target) &&
+    !notificationPanel.value?.contains(target)
+  ) {
+    notificationOpen.value = false;
+  }
+}
+
 function applyFilters(): void {
   offset.value = 0;
 }
@@ -396,8 +486,14 @@ function messageFrom(caught: unknown): string {
   return caught instanceof Error ? caught.message : "An unexpected error occurred.";
 }
 
-onMounted(loadBookmarks);
+onMounted(() => {
+  document.addEventListener("keydown", focusSearch);
+  document.addEventListener("pointerdown", dismissHeaderPanels);
+  void loadBookmarks();
+});
 onBeforeUnmount(() => {
+  document.removeEventListener("keydown", focusSearch);
+  document.removeEventListener("pointerdown", dismissHeaderPanels);
   if (searchTimer !== null) {
     window.clearTimeout(searchTimer);
   }
@@ -406,11 +502,44 @@ onBeforeUnmount(() => {
 
 <template>
   <main class="shell">
-    <header class="hero">
-      <p class="eyebrow">Personal bookmark archive</p>
-      <h1>Link Hoarder</h1>
-      <p>Search, classify, and import bookmarks from one private workspace.</p>
-      <div class="notifications">
+    <header class="app-header">
+      <div class="brand">
+        <img class="brand-mark" src="/link-hoarder.svg" alt="" width="48" height="48" />
+        <h1>Link Hoarder</h1>
+      </div>
+      <form class="header-search" role="search" @submit.prevent="search">
+        <div class="search-field">
+          <input
+            ref="searchInput"
+            v-model="query"
+            type="search"
+            aria-label="Search bookmarks"
+            aria-keyshortcuts="/"
+            placeholder="Search title, URL, or tag"
+            @input="scheduleSearch"
+          />
+          <button
+            v-if="query"
+            class="clear-search"
+            type="button"
+            aria-label="Clear search"
+            @click="clearSearch"
+          >×</button>
+        </div>
+      </form>
+      <div class="notifications header-actions">
+        <button class="secondary icon-button add-bookmark" type="button" aria-label="Add bookmark" @click="openCreateBookmark">
+          <svg aria-hidden="true" viewBox="0 0 24 24">
+            <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+            <path d="M12 7v6M9 10h6" />
+          </svg>
+        </button>
+        <button class="secondary icon-button import-bookmarks" type="button" aria-label="Import bookmarks" @click="importOpen = true">
+          <svg aria-hidden="true" viewBox="0 0 24 24">
+            <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+            <path d="M14 3v5h5M8 13h8M13 10l3 3-3 3" />
+          </svg>
+        </button>
         <nav v-if="abSwitchingEnabled" class="variant-switcher" aria-label="UI version">
           <span>Test UI</span>
           <a
@@ -425,14 +554,20 @@ onBeforeUnmount(() => {
           >Staging</a>
         </nav>
         <button
+          ref="settingsButton"
           class="settings-button icon-button"
           type="button"
           aria-controls="settings-panel"
           :aria-expanded="settingsOpen"
           aria-label="Settings"
           @click="settingsOpen = !settingsOpen"
-        >⚙</button>
+        >
+          <svg aria-hidden="true" viewBox="0 0 24 24">
+            <path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6" />
+          </svg>
+        </button>
         <button
+          ref="notificationButton"
           class="notification-button"
           type="button"
           aria-controls="notification-panel"
@@ -448,6 +583,7 @@ onBeforeUnmount(() => {
         <section
           v-if="settingsOpen"
           id="settings-panel"
+          ref="settingsPanel"
           class="notification-panel settings-panel"
           aria-labelledby="settings-heading"
         >
@@ -463,10 +599,22 @@ onBeforeUnmount(() => {
               <option value="gallery">Gallery</option>
             </select>
           </label>
+          <label>Accent color
+            <span class="accent-picker">
+              <input
+                v-model="settings.accentColor"
+                type="color"
+                aria-label="Accent color"
+                @change="updateAccentColor"
+              />
+              <output>{{ settings.accentColor.toUpperCase() }}</output>
+            </span>
+          </label>
         </section>
         <section
           v-if="notificationOpen"
           id="notification-panel"
+          ref="notificationPanel"
           class="notification-panel"
           aria-labelledby="notification-heading"
         >
@@ -543,12 +691,6 @@ onBeforeUnmount(() => {
     <section class="panel collection" aria-labelledby="collection-heading">
       <div class="section-heading collection-heading">
         <div><p class="eyebrow">{{ total }} saved</p><h2 id="collection-heading">Collection</h2></div>
-        <form class="search collection-actions" role="search" @submit.prevent="search">
-          <input v-model="query" aria-label="Search bookmarks" placeholder="Search title, URL, or tag" @input="scheduleSearch" />
-          <button class="secondary icon-button search-button" type="submit" aria-label="Search bookmarks">⌕</button>
-          <button class="primary icon-button add-bookmark" type="button" aria-label="Add bookmark" @click="openCreateBookmark">＋</button>
-          <button class="secondary icon-button import-bookmarks" type="button" aria-label="Import bookmarks" @click="importOpen = true">⇩</button>
-        </form>
       </div>
 
       <div class="collection-layout">
@@ -659,7 +801,7 @@ onBeforeUnmount(() => {
                 <p v-if="bookmark.folder" class="folder">{{ bookmark.folder }}</p>
                 <div v-if="bookmark.tags?.length" class="tags"><span v-for="tag in bookmark.tags" :key="tag">{{ tag }}</span></div>
               </div>
-              <div class="actions"><button class="text-button icon-button edit-bookmark" type="button" :aria-label="`Edit ${bookmark.title}`" @click="editBookmark(bookmark)">✎</button><button class="danger icon-button delete-bookmark" type="button" :aria-label="`Delete ${bookmark.title}`" @click="removeBookmark(bookmark)">×</button></div>
+              <div class="actions"><button class="text-button icon-button edit-bookmark" type="button" :aria-label="`Edit ${bookmark.title}`" @click="editBookmark(bookmark)">✎</button><button class="icon-button delete-bookmark" type="button" :aria-label="`Delete ${bookmark.title}`" @click="removeBookmark(bookmark)"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14H6L5 6M10 11v5M14 11v5" /></svg></button></div>
             </li>
           </ul>
 

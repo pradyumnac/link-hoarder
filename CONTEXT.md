@@ -38,18 +38,24 @@ The first release provides these features:
 These requirements apply only to the browser interface:
 
 - Update search results as the user types.
-- Put icon-only Add, Search, and Import actions to the right of the search box.
+- Match the Add, Import, Settings, and Notifications backgrounds and use the accent color on hover.
 - Show bookmark HTML import controls in a modal dialog.
 - Support responsive layouts across screen sizes.
 - Provide gallery and list views with a left navigation pane.
 - Filter bookmarks by tag, bookmark type, and folder.
 - Show folder hierarchy navigation with breadcrumbs.
 - Store browser settings in browser-local storage.
-- Let the user set the page size and the default collection view.
+- Let the user set the page size, default collection view, and accent color.
+- Use green as the default accent color.
+- Apply the accent color to status messages and unread notification events.
+- Keep error alerts red for all accent colors.
+- Show bookmark deletion as a transparent red outline trash icon in all collection views.
+- Close Settings and Notifications when the user clicks outside the open panel.
 - Show bookmark creation and editing forms in modal dialogs.
 - Use more screen width on wide and 4K displays while keeping text readable.
-- Use accessible Unicode icons for bookmark actions, search, import close, and alert dismissal.
-- Show the Unicode Settings icon beside the Notifications icon.
+- Use an accessible icon for each bookmark action, close control, and alert dismissal.
+- Use one linked-chain SVG for the application header and browser favicon.
+- Show the Settings icon beside the Notifications icon.
 - Let the user type in the folder filter and show matching folders in its dropdown.
 
 The first release does not provide browser synchronization.

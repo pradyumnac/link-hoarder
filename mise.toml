@@ -98,6 +98,10 @@ run = "stack/ab-stack.sh up"
 description = "Stop the A/B test stack"
 run = "stack/ab-stack.sh down"
 
+[tasks.ab-check]
+description = "Verify Stable and Staging selection through the running A/B stack"
+run = "stack/check-ab-switch.sh"
+
 [tasks.ab-stage]
 description = "Deploy the active branch as the staging UI"
 run = "stack/ab-stack.sh deploy-staging"

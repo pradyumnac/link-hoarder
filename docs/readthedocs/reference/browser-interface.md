@@ -4,18 +4,21 @@ The browser interface provides bookmark management through the HTTP API.
 
 ## Collection actions
 
-The action icons are to the right of the search box.
+The Add and Import icons are to the right of the search box.
+Add, Import, Settings, and Notifications use matching backgrounds.
+Their backgrounds use the selected accent color on hover.
+The Add, Import, Settings, and Notifications SVGs use the same size and stroke width.
 Each icon has an accessible label.
 
 | Icon | Action |
 | --- | --- |
-| `⌕` | Run the current search immediately. |
-| `＋` | Open the bookmark creation dialog. |
-| `⇩` | Open the bookmark HTML import dialog. |
-| `✎` | Open the selected bookmark for editing. |
-| `×` | Delete a bookmark or close a message or dialog. |
+| Bookmark with plus | Open the bookmark creation dialog. |
+| Arrow entering a file | Open the bookmark HTML import dialog. |
+| Pencil | Open the selected bookmark for editing. |
+| Red outline trash | Delete a bookmark. |
+| Cross | Close a message or dialog. |
 
-Search also runs after the user stops typing.
+Search runs after the user stops typing. Press Enter to run it immediately.
 
 ## Test UI selection
 
@@ -41,8 +44,12 @@ Selecting a parent folder includes bookmarks from its child folders.
 Creation, editing, and bookmark HTML import use modal dialogs.
 The Notifications icon opens the event list.
 The Settings icon is beside the Notifications icon.
+Click outside an open Settings or Notifications panel to close it.
+Settings contains an accent color picker. The default accent color is green.
 
 Import warnings and failed operations create notification events.
+Status messages and unread events use the selected accent color.
+Error alerts remain red.
 Alerts and status notices also have a close icon.
 
 ## Layout

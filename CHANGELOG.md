@@ -4,6 +4,7 @@
 
 ### Added
 
+- Make search the primary control in a compact, themeable application header (ui-header-compact).
 - Export bookmarks to browser-compatible HTML and structured JSON files (cli-bookmark-export).
 - Import native Brave and Zen browser profiles (import-brave.zen-native).
 - Add responsive browser views, filters, folder navigation, saved display settings, and modal workflows (core-browser-workspace).

@@ -48,7 +48,9 @@ These settings apply only to the current browser profile.
 | --- | --- | --- | --- |
 | Page size | `10`, `25`, or `50` | `10` | Set the number of bookmarks on each page. |
 | Default view | `list` or `gallery` | `list` | Select the initial collection view. |
+| Accent color | Six-digit hexadecimal color | `#0d684d` | Set action, status, and unread-event accents. |
 
+Use the color picker in Settings to select the accent color.
 The web interface uses the defaults when the stored value is missing or invalid.
 
 ## UI variant session
@@ -58,4 +60,5 @@ The valid values are `stable` and `staging`. The cookie expires when the browser
 The proxy uses `stable` when the cookie is missing or invalid.
 
 The `version` query parameter selects a variant and replaces the session cookie value.
+The proxy then redirects to the same path without the query string before it loads UI assets.
 This setting applies only to the local Docker A/B test workflow.

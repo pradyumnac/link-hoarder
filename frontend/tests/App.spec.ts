@@ -42,11 +42,58 @@ describe("App", () => {
 
   afterEach(() => vi.useRealTimers());
 
+  /** Given focus outside an editable control, slash focuses the primary search field. */
+  it("focuses search with the slash shortcut", async () => {
+    const wrapper = mount(App, { attachTo: document.body });
+    await flushPromises();
+    const event = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "/" });
+
+    document.body.dispatchEvent(event);
+
+    expect(document.activeElement).toBe(wrapper.get('input[aria-label="Search bookmarks"]').element);
+    expect(event.defaultPrevented).toBe(true);
+    wrapper.unmount();
+  });
+
+  /** Given focus in an editable control, slash keeps focus in that control. */
+  it("does not override slash in an editable control", async () => {
+    const wrapper = mount(App, { attachTo: document.body });
+    await flushPromises();
+    await wrapper.get(".add-bookmark").trigger("click");
+    const titleInput = wrapper.get('input[placeholder="Useful reference"]');
+    const event = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "/" });
+
+    (titleInput.element as HTMLInputElement).focus();
+    titleInput.element.dispatchEvent(event);
+
+    expect(document.activeElement).toBe(titleInput.element);
+    expect(event.defaultPrevented).toBe(false);
+    wrapper.unmount();
+  });
+
+  /** Given a 320 px viewport, the compact header keeps each required control present. */
+  it("keeps compact-header controls present at the narrow viewport", async () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 320 });
+    const wrapper = mount(App);
+    await flushPromises();
+    const header = wrapper.get(".app-header");
+
+    expect(header.get("h1").text()).toBe("Link Hoarder");
+    expect(header.get(".brand-mark").attributes("src")).toContain("svg");
+    expect(header.findAll('input[aria-label="Search bookmarks"]')).toHaveLength(1);
+    expect(header.findAll('[aria-label="Add bookmark"]')).toHaveLength(1);
+    expect(header.findAll('[aria-label="Import bookmarks"]')).toHaveLength(1);
+    expect(header.findAll('[aria-label="UI version"]')).toHaveLength(1);
+    expect(header.findAll('[aria-label="Settings"]')).toHaveLength(1);
+    expect(header.findAll('[aria-label="Notifications"]')).toHaveLength(1);
+    expect(header.find(".search-button").exists()).toBe(false);
+  });
+
   /** Given saved settings, the page restores the default view and page size. */
   it("restores browser settings from local storage", async () => {
     window.localStorage.setItem(
       "link-hoarder.browser-settings",
-      JSON.stringify({ defaultView: "gallery", pageSize: 25 }),
+      JSON.stringify({ accentColor: "#7c3aed", defaultView: "gallery", pageSize: 25 }),
     );
     const items = Array.from({ length: 30 }, (_, index) => ({
       ...bookmark,
@@ -66,6 +113,7 @@ describe("App", () => {
     expect(wrapper.get(".bookmark-list").classes()).toContain("gallery-view");
     expect(wrapper.findAll(".bookmark-card")).toHaveLength(25);
     expect(wrapper.get(".pagination").text()).toContain("Page 1 of 2");
+    expect(document.documentElement.style.getPropertyValue("--accent")).toBe("#7c3aed");
   });
 
   /** Given no version cookie, the top bar identifies stable as the active UI. */
@@ -101,10 +149,42 @@ describe("App", () => {
     await settingsPanel.findAll("select")[1]!.setValue("gallery");
 
     expect(JSON.parse(window.localStorage.getItem("link-hoarder.browser-settings") ?? "{}")).toEqual({
+      accentColor: "#0d684d",
       defaultView: "gallery",
       pageSize: 25,
     });
     expect(wrapper.get(".bookmark-list").classes()).toContain("gallery-view");
+  });
+
+  /** Given a selected accent, Settings applies and stores the color. */
+  it("saves the selected accent color", async () => {
+    const wrapper = mount(App);
+    await flushPromises();
+    await wrapper.get(".settings-button").trigger("click");
+
+    await wrapper.get('input[aria-label="Accent color"]').setValue("#7c3aed");
+
+    expect(document.documentElement.style.getPropertyValue("--accent")).toBe("#7c3aed");
+    expect(document.documentElement.style.getPropertyValue("--accent-contrast")).toBe("#ffffff");
+    expect(JSON.parse(window.localStorage.getItem("link-hoarder.browser-settings") ?? "{}")).toEqual({
+      accentColor: "#7c3aed",
+      defaultView: "list",
+      pageSize: 10,
+    });
+  });
+
+  /** Given a malformed saved accent, the page keeps valid settings and uses green. */
+  it("uses green for a malformed saved accent color", async () => {
+    window.localStorage.setItem(
+      "link-hoarder.browser-settings",
+      JSON.stringify({ accentColor: "purple", defaultView: "gallery", pageSize: 25 }),
+    );
+
+    const wrapper = mount(App);
+    await flushPromises();
+
+    expect(wrapper.get(".bookmark-list").classes()).toContain("gallery-view");
+    expect(document.documentElement.style.getPropertyValue("--accent")).toBe("#0d684d");
   });
 
   /** Given malformed saved settings, the page uses safe defaults. */
@@ -138,19 +218,23 @@ describe("App", () => {
     expect(api.listBookmarks).toHaveBeenCalledTimes(2);
   });
 
-  /** Given an active query, clearing the input reloads the unfiltered collection. */
-  it("reloads bookmarks when the user clears search", async () => {
-    const wrapper = mount(App);
+  /** Given an active query, the clear control reloads and focuses unfiltered search. */
+  it("clears search with the clear control", async () => {
+    const wrapper = mount(App, { attachTo: document.body });
     await flushPromises();
     vi.useFakeTimers();
     const searchInput = wrapper.get('input[aria-label="Search bookmarks"]');
 
     await searchInput.setValue("reader");
     await vi.advanceTimersByTimeAsync(300);
-    await searchInput.setValue("");
-    await vi.advanceTimersByTimeAsync(300);
+    await wrapper.get('[aria-label="Clear search"]').trigger("click");
+    await flushPromises();
 
+    expect(searchInput.element).toHaveProperty("value", "");
     expect(api.listBookmarks).toHaveBeenLastCalledWith("", 1000, 0);
+    expect(document.activeElement).toBe(searchInput.element);
+    expect(wrapper.find('[aria-label="Clear search"]').exists()).toBe(false);
+    wrapper.unmount();
   });
 
   /** Given a failed live search, the interface records and shows the failure. */
@@ -272,19 +356,51 @@ describe("App", () => {
     expect(wrapper.get(".bookmark-list").classes()).toContain("list-view");
   });
 
-  /** Given bookmark and search actions, Unicode icons retain accessible labels. */
-  it("uses accessible Unicode action icons", async () => {
+  /** Given header actions, Add and Import use labeled purpose-specific vector icons. */
+  it("uses accessible header action icons", async () => {
     const wrapper = mount(App);
     await flushPromises();
 
-    expect(wrapper.get('[aria-label="Settings"]').text()).toBe("⚙");
-    expect(wrapper.get(".search-button").text()).toBe("⌕");
-    expect(wrapper.get('[aria-label="Add bookmark"]').text()).toBe("＋");
-    expect(wrapper.get('[aria-label="Import bookmarks"]').text()).toBe("⇩");
+    expect(wrapper.get('[aria-label="Settings"] path').attributes("d")).toContain("M4 21v-7");
+    expect(wrapper.get('[aria-label="Add bookmark"]').classes()).toContain("secondary");
+    expect(wrapper.get('[aria-label="Import bookmarks"]').classes()).toContain("secondary");
+    expect(wrapper.get('[aria-label="Add bookmark"] path').attributes("d")).toContain(
+      "M19 21l-7-5-7 5",
+    );
+    expect(wrapper.get('[aria-label="Import bookmarks"] path').attributes("d")).toContain(
+      "M14 3H7",
+    );
     expect(wrapper.get('[aria-label="Edit Reader"]').text()).toBe("✎");
-    expect(wrapper.get('[aria-label="Delete Reader"]').text()).toBe("×");
+    const deleteAction = wrapper.get('[aria-label="Delete Reader"]');
+    expect(deleteAction.classes()).not.toContain("danger");
+    expect(deleteAction.get("path").attributes("d")).toContain("M3 6h18");
     await wrapper.get(".import-bookmarks").trigger("click");
     expect(wrapper.get('[aria-label="Close import"]').text()).toBe("×");
+  });
+
+  /** Given an open header panel, inside interaction keeps it open and outside click closes it. */
+  it("dismisses header panels on outside click", async () => {
+    const wrapper = mount(App, { attachTo: document.body });
+    await flushPromises();
+
+    await wrapper.get(".settings-button").trigger("click");
+    wrapper.get(".settings-panel").element.dispatchEvent(
+      new MouseEvent("pointerdown", { bubbles: true }),
+    );
+    expect(wrapper.find(".settings-panel").exists()).toBe(true);
+    document.body.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+    await wrapper.vm.$nextTick();
+    expect(wrapper.find(".settings-panel").exists()).toBe(false);
+
+    await wrapper.get(".notification-button").trigger("click");
+    wrapper.get(".notification-panel").element.dispatchEvent(
+      new MouseEvent("pointerdown", { bubbles: true }),
+    );
+    expect(wrapper.find(".notification-panel").exists()).toBe(true);
+    document.body.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+    await wrapper.vm.$nextTick();
+    expect(wrapper.find(".notification-panel").exists()).toBe(false);
+    wrapper.unmount();
   });
 
   /** Given a visible alert or notice, its Unicode close button dismisses it. */
@@ -394,6 +510,8 @@ describe("App", () => {
     });
     const wrapper = mount(App);
     await flushPromises();
+    await wrapper.get(".settings-button").trigger("click");
+    await wrapper.get('input[aria-label="Accent color"]').setValue("#7c3aed");
     await wrapper.get(".import-bookmarks").trigger("click");
     const input = wrapper.get('input[type="file"]');
     const file = new File(["profile"], "Bookmarks");
@@ -404,7 +522,9 @@ describe("App", () => {
     await flushPromises();
 
     expect(wrapper.get(".notification-count").text()).toBe("2");
+    expect(document.documentElement.style.getPropertyValue("--accent")).toBe("#7c3aed");
     await wrapper.get(".notification-button").trigger("click");
+    expect(wrapper.get(".notification-list li").classes()).toContain("unread");
     expect(wrapper.get(".notification-list").text()).toContain("Imported 0; skipped 0.");
     expect(wrapper.get(".notification-list").text()).toContain("One bookmark is invalid.");
     expect(wrapper.get(".notice").text()).toContain("1 warning is in Notifications.");
