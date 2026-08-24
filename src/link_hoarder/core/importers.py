@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import cast
 
 import structlog
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from link_hoarder.core.backend import (
     BookmarkBackend,
@@ -18,6 +18,7 @@ from link_hoarder.core.backend import (
 )
 from link_hoarder.core.models import (
     BookmarkCreate,
+    BookmarkRead,
     BookmarkSource,
     Browser,
     HtmlImportResult,
@@ -51,6 +52,19 @@ class ProfileReadResult(BaseModel):
     bookmarks: list[BookmarkCreate] = Field(default_factory=list)
     discovered: int = 0
     warnings: list[ImportWarning] = Field(default_factory=list)
+
+
+class HtmlImportDetail(BaseModel):
+    """Bookmark HTML export import result with the bookmarks it created.
+
+    This is an internal-only carrier. The public API response body stays
+    ``HtmlImportResult``, which does not list the created bookmarks.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    result: HtmlImportResult
+    created: list[BookmarkRead] = Field(default_factory=list)
 
 
 class BookmarkHtmlParser(HTMLParser):
@@ -220,7 +234,7 @@ def import_profiles(
             continue
 
         discovered += profile_result.discovered
-        stored, duplicates, profile_warnings = _store_profile_result(
+        stored, duplicates, profile_warnings, _created = _store_profile_result(
             repository, profile_result, current
         )
         imported += stored
@@ -241,6 +255,20 @@ def import_html_export(
     path: Path,
 ) -> HtmlImportResult:
     """Import one Netscape bookmark HTML export."""
+    return import_html_export_detailed(repository, path).result
+
+
+def import_html_export_detailed(
+    repository: BookmarkBackend,
+    path: Path,
+) -> HtmlImportDetail:
+    """Import one Netscape bookmark HTML export and report its created bookmarks.
+
+    Callers that must act on exactly the bookmarks this import created (for
+    example, to queue metadata refreshes) should use this function instead
+    of ``import_html_export``. The bookmark list stays out of
+    ``HtmlImportResult`` because that model is the public API response body.
+    """
     try:
         profile_result = read_html_export(path)
     except OSError as error:
@@ -249,18 +277,20 @@ def import_html_export(
             profile=str(path),
             error_type=type(error).__name__,
         )
-        return HtmlImportResult(
-            profiles=1,
-            discovered=0,
-            imported=0,
-            skipped=0,
-            warnings=[
-                _warning(
-                    ImportWarningCode.PROFILE_UNREADABLE,
-                    "The bookmark export could not be read.",
-                    path,
-                )
-            ],
+        return HtmlImportDetail(
+            result=HtmlImportResult(
+                profiles=1,
+                discovered=0,
+                imported=0,
+                skipped=0,
+                warnings=[
+                    _warning(
+                        ImportWarningCode.PROFILE_UNREADABLE,
+                        "The bookmark export could not be read.",
+                        path,
+                    )
+                ],
+            )
         )
     except UnicodeError as error:
         logger.warning(
@@ -268,29 +298,34 @@ def import_html_export(
             profile=str(path),
             error_type=type(error).__name__,
         )
-        return HtmlImportResult(
-            profiles=1,
-            discovered=0,
-            imported=0,
-            skipped=0,
-            warnings=[
-                _warning(
-                    ImportWarningCode.PROFILE_INVALID,
-                    "The bookmark export encoding is invalid.",
-                    path,
-                )
-            ],
+        return HtmlImportDetail(
+            result=HtmlImportResult(
+                profiles=1,
+                discovered=0,
+                imported=0,
+                skipped=0,
+                warnings=[
+                    _warning(
+                        ImportWarningCode.PROFILE_INVALID,
+                        "The bookmark export encoding is invalid.",
+                        path,
+                    )
+                ],
+            )
         )
 
-    stored, duplicates, warnings = _store_profile_result(
+    stored, duplicates, warnings, created = _store_profile_result(
         repository, profile_result, path
     )
-    return HtmlImportResult(
-        profiles=1,
-        discovered=profile_result.discovered,
-        imported=stored,
-        skipped=duplicates,
-        warnings=warnings,
+    return HtmlImportDetail(
+        result=HtmlImportResult(
+            profiles=1,
+            discovered=profile_result.discovered,
+            imported=stored,
+            skipped=duplicates,
+            warnings=warnings,
+        ),
+        created=created,
     )
 
 
@@ -317,10 +352,11 @@ def _store_profile_result(
     repository: BookmarkBackend,
     profile_result: ProfileReadResult,
     profile: Path,
-) -> tuple[int, int, list[ImportWarning]]:
+) -> tuple[int, int, list[ImportWarning], list[BookmarkRead]]:
     imported = 0
     skipped = 0
     warnings = list(profile_result.warnings)
+    created: list[BookmarkRead] = []
     for bookmark in profile_result.bookmarks:
         if repository.find_by_url(bookmark.url) is not None:
             skipped += 1
@@ -333,7 +369,7 @@ def _store_profile_result(
             )
             continue
         try:
-            repository.create(bookmark)
+            stored = repository.create(bookmark)
         except DuplicateBookmarkError:
             skipped += 1
             warnings.append(
@@ -360,7 +396,8 @@ def _store_profile_result(
             )
             continue
         imported += 1
-    return imported, skipped, warnings
+        created.append(stored)
+    return imported, skipped, warnings, created
 
 
 def _read_chromium(browser: Browser, path: Path) -> ProfileReadResult:

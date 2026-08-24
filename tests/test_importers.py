@@ -10,6 +10,7 @@ from link_hoarder.core import importers
 from link_hoarder.core.importers import (
     discover_profiles,
     import_html_export,
+    import_html_export_detailed,
     import_profiles,
     read_html_export,
     read_profile,
@@ -378,3 +379,103 @@ def test_import_continues_after_storage_failure(
     assert result.discovered == 2
     assert result.warnings[0].code == "bookmark_store_failed"
     assert repository.find_by_url("https://keep.example/") is not None
+
+
+# Test plan: import-metadata-refresh
+#   primary: import_html_export_detailed reports the created BookmarkRead
+#     objects for a fresh import into an empty library.
+#   alternate: import_html_export stays a thin wrapper that returns the same
+#     HtmlImportResult as the detailed call, so the CLI keeps working.
+#   edge: importing into a library that already holds more than 1000
+#     bookmarks (the repository.list default cap) still reports exactly the
+#     newly created bookmarks, none of the pre-existing ones.
+#   negative: an import where every bookmark is a duplicate reports no
+#     created bookmarks.
+
+
+def test_import_html_export_detailed_reports_created_bookmarks(
+    tmp_path: Path, repository: BookmarkRepository
+) -> None:
+    """Given a fresh import, the detailed result lists the bookmarks it created."""
+    export = tmp_path / "bookmarks.html"
+    export.write_text(
+        """<!DOCTYPE NETSCAPE-Bookmark-file-1>
+<DL><p>
+  <DT><A HREF="https://one.example">One</A>
+  <DT><A HREF="https://two.example">Two</A>
+</DL><p>
+""",
+        encoding="utf-8",
+    )
+
+    detail = import_html_export_detailed(repository, export)
+
+    assert detail.result.imported == 2
+    assert [bookmark.url for bookmark in detail.created] == [
+        "https://one.example/",
+        "https://two.example/",
+    ]
+    assert all(bookmark.id is not None for bookmark in detail.created)
+
+
+def test_import_html_export_wraps_the_detailed_result(
+    tmp_path: Path, repository: BookmarkRepository
+) -> None:
+    """Given the same export, the thin wrapper matches the detailed result."""
+    export = tmp_path / "bookmarks.html"
+    export.write_text(
+        """<!DOCTYPE NETSCAPE-Bookmark-file-1>
+<DL><p><DT><A HREF="https://example.com">Example</A></DL><p>
+""",
+        encoding="utf-8",
+    )
+
+    detail = import_html_export_detailed(repository, export)
+    result = import_html_export(repository, export)
+
+    assert result.imported == 0
+    assert result.skipped == 1
+    assert detail.result.imported == 1
+
+
+def test_import_html_export_detailed_ignores_bookmarks_beyond_the_list_window(
+    tmp_path: Path, repository: BookmarkRepository
+) -> None:
+    """Given a library over 1000 rows, detail reports only the newly created rows."""
+    for number in range(1005):
+        repository.create(
+            BookmarkCreate(
+                url=f"https://existing.example/{number}", title=f"Existing {number}"
+            )
+        )
+    export = tmp_path / "bookmarks.html"
+    export.write_text(
+        """<!DOCTYPE NETSCAPE-Bookmark-file-1>
+<DL><p><DT><A HREF="https://new.example">New</A></DL><p>
+""",
+        encoding="utf-8",
+    )
+
+    detail = import_html_export_detailed(repository, export)
+
+    assert [bookmark.url for bookmark in detail.created] == ["https://new.example/"]
+
+
+def test_import_html_export_detailed_reports_no_created_bookmarks_for_duplicates(
+    tmp_path: Path, repository: BookmarkRepository
+) -> None:
+    """Given an import where every bookmark already exists, nothing is reported."""
+    repository.create(BookmarkCreate(url="https://example.com", title="Example"))
+    export = tmp_path / "bookmarks.html"
+    export.write_text(
+        """<!DOCTYPE NETSCAPE-Bookmark-file-1>
+<DL><p><DT><A HREF="https://example.com">Example</A></DL><p>
+""",
+        encoding="utf-8",
+    )
+
+    detail = import_html_export_detailed(repository, export)
+
+    assert detail.result.imported == 0
+    assert detail.result.skipped == 1
+    assert detail.created == []
