@@ -6,7 +6,13 @@ Task conventions: `todo-md-lite` skill. Shipped work is in `CHANGELOG.md`.
 
 | ID | Type | Status | Task | Depends | ADR | Triage |
 | --- | --- | --- | --- | --- | --- | --- |
-| test-metadata-delivery | test | pending | Validate metadata delivery with malformed URLs and 1,500 bookmarks | | 0005 | n |
+| core-metadata-promotion | fix | pending | Promote a backfilled bookmark when a visible request needs it | | 0005 | n |
+| core-metadata-failure.memory | fix | pending | Hold a retry backoff when a failure record cannot be stored | | 0005 | n |
+| core-metadata-backfill.sweep | feature | pending | Sweep missing bookmark metadata idempotently in the background | | 0005 | n |
+| core-metadata-svg.icons | feature | blocked | Convert SVG site icons to PNG before rejecting them | | 0005 | n |
+| api-availability-favicon | refactor | pending | Stop reading unused favicon availability for each collection row | | 0005 | n |
+| core-collection-presentation | fix | pending | Correct collection list and gallery layout, spacing, and truncation | | | n |
+| test-metadata-delivery | test | pending | Validate metadata delivery with malformed URLs and 1,500 bookmarks | core-metadata-promotion, core-metadata-failure.memory, core-metadata-backfill.sweep, api-availability-favicon | 0005 | n |
 
 ## Future
 
@@ -19,7 +25,7 @@ Task conventions: `todo-md-lite` skill. Shipped work is in `CHANGELOG.md`.
 | core-navigation-disclosure | feature | pending | Prioritize taxonomy facets and collapse raw Sources by default | | | n |
 | infra-ab-controls | fix | pending | Move A/B variant controls outside the product header | | 0004 | n |
 | api-delete-atomicity | fix | pending | Preserve one atomic result for concurrent bookmark deletion | | | n |
-| core-metadata-cache-cleanup | fix | pending | Remove temporary and orphaned metadata cache files | | 0005 | n |
+| core-metadata-cache.cleanup | fix | pending | Remove temporary and orphaned metadata cache files | | 0005 | n |
 | core-thumbnail-recovery | fix | pending | Retry thumbnails after transient browser image failures | | 0005 | n |
 | core-metadata-charset | fix | pending | Decode metadata HTML with its declared character set | | 0005 | n |
 | api-metadata-shutdown | fix | pending | Stop metadata workers without blocking the API event loop | | 0005 | n |
