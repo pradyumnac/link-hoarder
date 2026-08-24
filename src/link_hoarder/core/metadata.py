@@ -68,7 +68,11 @@ _MAX_FAILURE_BACKOFF_ENTRIES = 1000
 # has more rows, so the next sweep follows almost immediately. An empty
 # batch means the backlog is drained, so the sweeper backs off to a slow
 # idle poll instead of hammering the database on a live system.
-_SWEEP_BATCH_SIZE = 200
+#
+# The batch never exceeds `_MAX_BACKFILL_PENDING`. A larger batch reads rows
+# that `queue_backfill` must immediately drop, which wastes the query and
+# logs a queue-full warning for each dropped row.
+_SWEEP_BATCH_SIZE = _MAX_BACKFILL_PENDING
 _SWEEP_ACTIVE_POLL_SECONDS = 1.0
 _SWEEP_IDLE_POLL_SECONDS = 300.0
 

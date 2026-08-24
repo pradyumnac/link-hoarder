@@ -8,6 +8,7 @@ Task conventions: `todo-md-lite` skill. Shipped work is in `CHANGELOG.md`.
 | --- | --- | --- | --- | --- | --- | --- |
 | core-metadata-svg.icons | feature | blocked | Convert SVG site icons to PNG before rejecting them | | 0005 | n |
 | core-metadata-reason | feature | pending | Store why a metadata fetch was blocked or failed | infra-schema-migrations | 0005 | n |
+| core-link-gone | feature | pending | Record and show bookmarks whose URL returns HTTP 404 or 410 | core-metadata-reason | 0005 | n |
 | test-metadata-delivery | test | pending | Validate metadata delivery with malformed URLs and 1,500 bookmarks | | 0005 | n |
 
 ## Future

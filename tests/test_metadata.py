@@ -1203,3 +1203,8 @@ def test_asset_availability_performs_no_favicon_filesystem_check(
 
     assert checked_filenames == [cached.thumbnail_file]
     service.close()
+
+
+def test_sweep_batch_never_exceeds_the_backfill_cap() -> None:
+    """Given a sweep batch, it cannot be larger than the backfill admission cap."""
+    assert metadata_module._SWEEP_BATCH_SIZE <= metadata_module._MAX_BACKFILL_PENDING
