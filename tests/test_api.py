@@ -320,3 +320,56 @@ def test_api_does_not_echo_invalid_input(tmp_path: Path) -> None:
 
     assert response.status_code == 422
     assert "sensitive-invalid-value" not in response.text
+
+
+# Test plan: api-metadata-query-load
+#   primary: a page of bookmarks issues the same bounded number of metadata
+#     queries regardless of how many bookmarks are on the page.
+#   alternate: covered by existing CRUD and presentation tests, which already
+#     assert the response shape (favicon_url/thumbnail_url) is unchanged.
+
+
+def test_api_list_bookmarks_metadata_query_count_does_not_grow_with_page_size(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Given pages of different sizes, list_bookmarks issues a bounded query count."""
+    client = _client(tmp_path)
+    for number in range(50):
+        client.post(
+            f"{_API_PREFIX}/bookmarks",
+            headers=_HEADERS,
+            json={"url": f"https://example.com/{number}", "title": f"Match {number}"},
+        )
+
+    calls: list[int] = []
+    original_list_metadata = BookmarkRepository.list_metadata
+    original_get_metadata = BookmarkRepository.get_metadata
+
+    def counted_list_metadata(self: BookmarkRepository, bookmark_ids: object) -> object:
+        calls.append(1)
+        return original_list_metadata(self, bookmark_ids)  # type: ignore[arg-type]
+
+    def counted_get_metadata(self: BookmarkRepository, bookmark_id: int) -> object:
+        calls.append(1)
+        return original_get_metadata(self, bookmark_id)
+
+    monkeypatch.setattr(BookmarkRepository, "list_metadata", counted_list_metadata)
+    monkeypatch.setattr(BookmarkRepository, "get_metadata", counted_get_metadata)
+
+    calls.clear()
+    small = client.get(
+        f"{_API_PREFIX}/bookmarks", headers=_HEADERS, params={"limit": 1}
+    )
+    small_calls = len(calls)
+
+    calls.clear()
+    large = client.get(
+        f"{_API_PREFIX}/bookmarks", headers=_HEADERS, params={"limit": 50}
+    )
+    large_calls = len(calls)
+
+    assert small.status_code == 200
+    assert large.status_code == 200
+    assert len(small.json()["items"]) == 1
+    assert len(large.json()["items"]) == 50
+    assert small_calls == large_calls

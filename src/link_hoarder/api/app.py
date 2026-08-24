@@ -28,6 +28,7 @@ from link_hoarder.core.config import Settings
 from link_hoarder.core.importers import import_html_export
 from link_hoarder.core.logging import configure_logging
 from link_hoarder.core.metadata import (
+    BookmarkAssetAvailability,
     BookmarkMetadataService,
     MetadataFetcher,
     generated_domain_icon,
@@ -158,10 +159,13 @@ def create_app(
         offset: Annotated[int, Query(ge=0)] = 0,
     ) -> BookmarkPresentationPage:
         bookmarks = repository.list(query=query, limit=limit, offset=offset)
-        for bookmark in bookmarks:
-            metadata.queue_refresh(bookmark)
+        metadata.queue_refresh_many(bookmarks)
+        availability = metadata.asset_availability(bookmarks)
         return BookmarkPresentationPage(
-            items=[_present_bookmark(bookmark, metadata) for bookmark in bookmarks],
+            items=[
+                _present_bookmark(bookmark, availability.get(bookmark.id))
+                for bookmark in bookmarks
+            ],
             total=repository.count(query=query),
             limit=limit,
             offset=offset,
@@ -268,13 +272,13 @@ def create_app(
 
 
 def _present_bookmark(
-    bookmark: BookmarkRead, metadata: BookmarkMetadataService
+    bookmark: BookmarkRead, availability: BookmarkAssetAvailability | None
 ) -> BookmarkPresentationRead:
     favicon_url = None
     thumbnail_url = None
     if not bookmark.url.lower().startswith("javascript:"):
         favicon_url = f"{_API_PREFIX}/bookmarks/{bookmark.id}/favicon"
-        if metadata.asset_path(bookmark.id, "thumbnail") is not None:
+        if availability is not None and availability.has_thumbnail:
             thumbnail_url = f"{_API_PREFIX}/bookmarks/{bookmark.id}/thumbnail"
     return BookmarkPresentationRead.model_validate(
         {
