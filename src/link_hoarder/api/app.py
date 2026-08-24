@@ -299,7 +299,15 @@ def _cached_file_response(request: Request, path: Path, *, media_type: str) -> R
     # would repeat the same I/O the cache is meant to avoid. `queue_refresh`
     # always replaces a cached file through a write-then-rename, so the
     # modification time changes on every content update.
-    stat = path.stat()
+    try:
+        stat = path.stat()
+    except OSError as error:
+        # A concurrent purge or refresh can remove the file after the
+        # service verified it. Report a missing asset, not a server fault.
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="The bookmark asset is no longer cached.",
+        ) from error
     etag = f'"{stat.st_size:x}-{int(stat.st_mtime_ns):x}"'
     not_modified = _not_modified_response(request, etag)
     if not_modified is not None:
@@ -326,12 +334,28 @@ def _cached_content_response(
 
 
 def _not_modified_response(request: Request, etag: str) -> Response | None:
-    if request.headers.get("if-none-match") == etag:
-        return Response(
-            status_code=status.HTTP_304_NOT_MODIFIED,
-            headers={"ETag": etag, "Cache-Control": _ASSET_CACHE_CONTROL},
-        )
-    return None
+    if not _matches_if_none_match(request.headers.get("if-none-match"), etag):
+        return None
+    return Response(
+        status_code=status.HTTP_304_NOT_MODIFIED,
+        headers={"ETag": etag, "Cache-Control": _ASSET_CACHE_CONTROL},
+    )
+
+
+def _matches_if_none_match(header: str | None, etag: str) -> bool:
+    """Compare an If-None-Match header with one entity tag.
+
+    RFC 9110 permits `*` and a list of entity tags. Comparison is weak, so
+    a `W/` prefix on either side does not prevent a match.
+    """
+    if header is None:
+        return False
+    candidate = etag.removeprefix("W/")
+    for item in header.split(","):
+        value = item.strip()
+        if value == "*" or value.removeprefix("W/") == candidate:
+            return True
+    return False
 
 
 def _not_found(bookmark_id: int) -> HTTPException:

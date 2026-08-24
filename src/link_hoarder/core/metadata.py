@@ -454,8 +454,17 @@ class BookmarkMetadataService:
         can never be retried in a hot loop.
         """
         with self._lock:
+            tracked = bookmark.id in self._active_generation
             generation = self._active_generation.get(bookmark.id, 0)
-        self._refresh_with_generation(bookmark, generation)
+            if not tracked:
+                self._active_generation[bookmark.id] = generation
+        try:
+            self._refresh_with_generation(bookmark, generation)
+        finally:
+            if not tracked:
+                with self._lock:
+                    if bookmark.id not in self._pending:
+                        self._active_generation.pop(bookmark.id, None)
 
     def _refresh_with_generation(self, bookmark: BookmarkRead, generation: int) -> None:
         now = datetime.now(UTC)

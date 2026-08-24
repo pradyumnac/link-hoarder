@@ -723,3 +723,39 @@ def test_queue_backfill_reserves_headroom_for_visible_work(
 
     assert bookmarks[2].url not in fetcher.requested_urls
     assert bookmarks[3].url in fetcher.requested_urls
+
+
+def test_purge_assets_cancels_a_direct_refresh(tmp_path: Path) -> None:
+    """Given a purge during a direct refresh, no metadata row is written."""
+    repository = _counting_repository(tmp_path)
+    bookmark = repository.create(
+        BookmarkCreate(url="https://example.com/", title="Example")
+    )
+    service = BookmarkMetadataService(
+        repository, tmp_path / "cache", fetcher=FailedFetcher(), enabled=False
+    )
+
+    class PurgingFetcher:
+        def fetch(self, url: str) -> FetchedMetadata:
+            service.purge_assets(bookmark.id)
+            raise MetadataFetchError("The metadata request failed.")
+
+    service._fetcher = PurgingFetcher()  # Simulate a concurrent purge.
+    service.refresh(bookmark)
+
+    assert repository.get_metadata(bookmark.id) is None
+
+
+def test_direct_refresh_leaves_no_retirement_entry(tmp_path: Path) -> None:
+    """Given a completed direct refresh, no per-bookmark state is retained."""
+    repository = _counting_repository(tmp_path)
+    bookmark = repository.create(
+        BookmarkCreate(url="https://example.com/", title="Example")
+    )
+    service = BookmarkMetadataService(
+        repository, tmp_path / "cache", fetcher=FailedFetcher(), enabled=False
+    )
+
+    service.refresh(bookmark)
+
+    assert service._active_generation == {}  # Assert no retained state.

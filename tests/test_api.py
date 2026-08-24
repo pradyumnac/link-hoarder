@@ -626,3 +626,67 @@ def test_api_import_of_only_duplicates_queues_no_metadata(
     assert response.json()["imported"] == 0
     assert response.json()["skipped"] == 1
     assert queued == []
+
+
+@pytest.mark.parametrize(
+    ("header_template", "expected"),
+    [
+        ("{etag}", 304),
+        ("*", 304),
+        ('"other", {etag}', 304),
+        ("W/{etag}", 304),
+        ('"other"', 200),
+        ("", 200),
+    ],
+)
+def test_api_asset_honours_every_if_none_match_form(
+    tmp_path: Path, header_template: str, expected: int
+) -> None:
+    """Given an If-None-Match list, star, or weak tag, the asset revalidates per RFC 9110."""
+    client = _client(tmp_path)
+    created = client.post(
+        f"{_API_PREFIX}/bookmarks",
+        headers=_HEADERS,
+        json={"url": "https://example.com", "title": "Example"},
+    )
+    asset_url = f"{_API_PREFIX}/bookmarks/{created.json()['id']}/favicon"
+    etag = client.get(asset_url, headers=_HEADERS).headers["etag"]
+
+    response = client.get(
+        asset_url,
+        headers={**_HEADERS, "If-None-Match": header_template.format(etag=etag)},
+    )
+
+    assert response.status_code == expected
+
+
+def test_api_asset_reports_not_found_when_cached_file_disappears(
+    tmp_path: Path,
+) -> None:
+    """Given a cached file removed after verification, the route reports 404, not a fault."""
+    settings = Settings(
+        database_path=tmp_path / "metadata.db",
+        metadata_cache_path=tmp_path / "metadata-cache",
+        metadata_refresh_enabled=True,
+        api_key=SecretStr(_API_KEY_VALUE),
+    )
+    with TestClient(create_app(settings, StaticMetadataFetcher())) as client:
+        client.post(
+            f"{_API_PREFIX}/bookmarks",
+            headers=_HEADERS,
+            json={"url": "https://example.com/path", "title": "Example"},
+        )
+        deadline = time.monotonic() + 2
+        listed = client.get(f"{_API_PREFIX}/bookmarks", headers=_HEADERS)
+        while listed.json()["items"][0]["thumbnail_url"] is None:
+            if time.monotonic() >= deadline:
+                pytest.fail("Metadata refresh did not finish.")
+            time.sleep(0.01)
+            listed = client.get(f"{_API_PREFIX}/bookmarks", headers=_HEADERS)
+        thumbnail_url = listed.json()["items"][0]["thumbnail_url"]
+        assert client.get(thumbnail_url, headers=_HEADERS).status_code == 200
+
+        for cached in (tmp_path / "metadata-cache").glob("*.png"):
+            cached.unlink()
+
+        assert client.get(thumbnail_url, headers=_HEADERS).status_code == 404
