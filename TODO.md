@@ -6,7 +6,7 @@ Task conventions: `todo-md-lite` skill. Shipped work is in `CHANGELOG.md`.
 
 | ID | Type | Status | Task | Depends | ADR | Triage |
 | --- | --- | --- | --- | --- | --- | --- |
-| core-bookmark-presentation | design | pending | Redesign bookmark presentation with icons, concise links, and thumbnail evaluation | | | n |
+| core-bookmark-presentation | design | blocked | Decide and implement icons, concise links, and thumbnail previews | | 0005 | n |
 
 ## Future
 

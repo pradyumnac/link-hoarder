@@ -9,3 +9,4 @@ Rationale lives in each file under `docs/adr/`; this is an index only.
 | [0002](0002-cli-backend-selection.md) | accepted | done | CLI backend selection |
 | [0003](0003-testing-ui-variants.md) | superseded by 0004 | not-started | Testing UI variants |
 | [0004](0004-opt-in-ui-variant-testing.md) | accepted | not-started | Opt-in UI variant testing |
+| [0005](0005-bookmark-metadata-cache.md) | proposed | n/a | Bookmark metadata cache |
