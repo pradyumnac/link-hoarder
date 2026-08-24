@@ -6,7 +6,7 @@ Task conventions: `todo-md-lite` skill. Shipped work is in `CHANGELOG.md`.
 
 | ID | Type | Status | Task | Depends | ADR | Triage |
 | --- | --- | --- | --- | --- | --- | --- |
-| api-asset-caching | fix | pending | Separate asset rate limits and add cache headers and ETags | | 0005 | n |
+| api-asset-caching | fix | pending | Add cache headers and ETags to bookmark asset routes | | 0005 | n |
 | api-metadata-query-load | fix | pending | Eliminate repeated metadata reads from collection responses | | 0005 | n |
 | core-metadata-scheduling | refactor | pending | Bound refresh work and prioritize visible bookmarks | | 0005 | n |
 | import-metadata-refresh | fix | pending | Queue metadata for newly imported bookmarks at every library size | | 0005 | n |

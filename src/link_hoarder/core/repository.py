@@ -1,6 +1,6 @@
 """SQLite bookmark repository."""
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -21,6 +21,8 @@ from link_hoarder.core.models import (
 )
 
 __all__ = ["BookmarkRepository", "BookmarkStorageError", "DuplicateBookmarkError"]
+
+_METADATA_BATCH_SIZE = 500
 
 
 class BookmarkRepository:
@@ -179,6 +181,31 @@ class BookmarkRepository:
                 if record is not None
                 else None
             )
+
+    def list_metadata(
+        self, bookmark_ids: Sequence[int]
+    ) -> dict[int, BookmarkMetadataRecord]:
+        """Get cached metadata for many bookmarks in one query."""
+        identifiers = list(dict.fromkeys(bookmark_ids))
+        if not identifiers:
+            return {}
+        found: dict[int, BookmarkMetadataRecord] = {}
+        with self.session() as session:
+            for start in range(0, len(identifiers), _METADATA_BATCH_SIZE):
+                batch = identifiers[start : start + _METADATA_BATCH_SIZE]
+                result = session.exec(
+                    select(BookmarkMetadataRecord).where(
+                        col(BookmarkMetadataRecord.bookmark_id).in_(batch)
+                    )
+                )
+                try:
+                    for record in result.all():
+                        found[record.bookmark_id] = (
+                            BookmarkMetadataRecord.model_validate(record)
+                        )
+                finally:
+                    result.close()
+        return found
 
     def save_metadata(self, metadata: BookmarkMetadataRecord) -> None:
         """Create or replace cached metadata for one bookmark."""
