@@ -498,6 +498,7 @@ describe("App", () => {
     expect(link.text()).toBe("docs.example.com/reference/a-long-path");
     expect(link.attributes("href")).toContain("?token=secret#section");
     expect(link.attributes("aria-label")).toContain("?token=secret#section");
+    expect(link.attributes("title")).toContain("?token=secret#section");
     expect(wrapper.get(".bookmark-icon").attributes("src")).toBe(
       "/api/v1/bookmarks/2/favicon",
     );
@@ -507,7 +508,55 @@ describe("App", () => {
     const thumbnail = wrapper.get(".bookmark-thumbnail img");
     expect(thumbnail.attributes("src")).toBe("/api/v1/bookmarks/2/thumbnail");
     await thumbnail.trigger("error");
-    expect(wrapper.find(".bookmark-thumbnail").exists()).toBe(false);
+    // The media area stays in place after a failed thumbnail load, so gallery
+    // cards keep a consistent height. It falls back to the brand mark instead
+    // of leaving an empty region.
+    expect(wrapper.find(".bookmark-thumbnail").exists()).toBe(true);
+    // The fallback reuses the app's own brand mark asset (same src as the
+    // header logo), which keeps it same-origin under the CSP.
+    expect(wrapper.get(".bookmark-thumbnail-fallback").attributes("src")).toBe(
+      wrapper.get(".brand-mark").attributes("src"),
+    );
+  });
+
+  /** Given a bookmark with no thumbnail at all, the gallery card still reserves a media area. */
+  it("shows a fallback media area for bookmarks without a thumbnail", async () => {
+    vi.mocked(api.listBookmarks).mockResolvedValue({
+      items: [{ ...bookmark, id: 3, thumbnail_url: null, url: "https://example.com/reading" }],
+      limit: 1000,
+      offset: 0,
+      total: 1,
+    });
+    const wrapper = mount(App);
+    await flushPromises();
+    await wrapper.get('[aria-label="Show gallery view"]').trigger("click");
+
+    expect(wrapper.findAll(".bookmark-thumbnail img")).toHaveLength(1);
+    expect(wrapper.get(".bookmark-thumbnail-fallback").attributes("src")).toBe(
+      wrapper.get(".brand-mark").attributes("src"),
+    );
+  });
+
+  /** Given a long URL, the gallery card truncates it to one line and keeps the full URL for the link and tooltip. */
+  it("truncates a long URL on one line in the gallery view", async () => {
+    const longUrl =
+      "https://community-scripts.github.io/ProxmoxVE/scripts?id=proxmox-ve-helper-scripts";
+    vi.mocked(api.listBookmarks).mockResolvedValue({
+      items: [{ ...bookmark, id: 4, thumbnail_url: null, url: longUrl }],
+      limit: 1000,
+      offset: 0,
+      total: 1,
+    });
+    const wrapper = mount(App);
+    await flushPromises();
+    await wrapper.get('[aria-label="Show gallery view"]').trigger("click");
+    const link = wrapper.get(".bookmark-url");
+
+    // The `.bookmark-url` class carries the single-line ellipsis truncation
+    // rule in style.css. The full URL stays available as the link target and
+    // as a hover tooltip.
+    expect(link.attributes("href")).toBe(longUrl);
+    expect(link.attributes("title")).toBe(longUrl);
   });
 
   /** Given header actions, Add and Import use labeled purpose-specific vector icons. */
