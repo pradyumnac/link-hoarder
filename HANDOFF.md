@@ -5,7 +5,7 @@ Store unresolved session findings in this file. Move each finding to its permane
 ## Execution state
 
 `main` contains the accepted compact-header, collection-navigation, and wide-layout redesigns.
-The active branch contains the verified ADR 0005 bookmark metadata implementation.
+The active branch contains ADR 0005 implementation with blocking metadata delivery fixes in `TODO.md`.
 
 The local ignored `stack/.env` sets `LINK_HOARDER_AB_ENABLED=true`.
 The A/B stack runs at `http://127.0.0.1:8080`.

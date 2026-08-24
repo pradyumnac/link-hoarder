@@ -6,6 +6,13 @@ Task conventions: `todo-md-lite` skill. Shipped work is in `CHANGELOG.md`.
 
 | ID | Type | Status | Task | Depends | ADR | Triage |
 | --- | --- | --- | --- | --- | --- | --- |
+| api-asset-caching | fix | pending | Separate asset rate limits and add cache headers and ETags | | 0005 | n |
+| api-metadata-query-load | fix | pending | Eliminate repeated metadata reads from collection responses | | 0005 | n |
+| core-metadata-scheduling | refactor | pending | Bound refresh work and prioritize visible bookmarks | | 0005 | n |
+| import-metadata-refresh | fix | pending | Queue metadata for newly imported bookmarks at every library size | | 0005 | n |
+| core-metadata-failure-cache | fix | pending | Normalize destination errors and back off failed refresh jobs | | 0005 | n |
+| core-metadata-retirement | fix | pending | Remove retired-ID leaks and rowid-reuse suppression | | 0005 | n |
+| test-metadata-delivery | test | pending | Validate metadata delivery with malformed URLs and 1,500 bookmarks | api-asset-caching, api-metadata-query-load, core-metadata-scheduling, import-metadata-refresh, core-metadata-failure-cache, core-metadata-retirement | 0005 | n |
 
 ## Future
 
@@ -14,10 +21,14 @@ Task conventions: `todo-md-lite` skill. Shipped work is in `CHANGELOG.md`.
 | infra-schema-migrations | infra | pending | Add versioned SQLite schema migrations and backfills | | | n |
 | core-actions-overflow | feature | pending | Move destructive and secondary bookmark actions into an overflow menu | | | n |
 | core-view-density | feature | pending | Add a dense single-line view and make it the default | | | n |
-| api-asset-caching | fix | pending | Add cache headers and ETags to local bookmark asset routes | | 0005 | n |
 | core-metadata-diagnostics | feature | pending | Expose metadata fetch status and blocked-request explanations | | 0005 | n |
 | core-navigation-disclosure | feature | pending | Prioritize taxonomy facets and collapse raw Sources by default | | | n |
 | infra-ab-controls | fix | pending | Move A/B variant controls outside the product header | | 0004 | n |
+| api-delete-atomicity | fix | pending | Preserve one atomic result for concurrent bookmark deletion | | | n |
+| core-metadata-cache-cleanup | fix | pending | Remove temporary and orphaned metadata cache files | | 0005 | n |
+| core-thumbnail-recovery | fix | pending | Retry thumbnails after transient browser image failures | | 0005 | n |
+| core-metadata-charset | fix | pending | Decode metadata HTML with its declared character set | | 0005 | n |
+| api-metadata-shutdown | fix | pending | Stop metadata workers without blocking the API event loop | | 0005 | n |
 | api-collection-query | feature | pending | Move collection filtering, sorting, paging, and totals to the API | | | n |
 | core-bookmark-lifecycle | design | pending | Decide Inbox, Archive, and deletion lifecycle rules | | | n |
 | core-domain-taxonomy | design | pending | Decide permanent domains separately from imported folders | | | n |
@@ -35,7 +46,6 @@ Task conventions: `todo-md-lite` skill. Shipped work is in `CHANGELOG.md`.
 | core-filter-chips | feature | pending | Add multi-value filter chips and a global filter reset | api-collection-query | | n |
 | core-results-sorting | feature | pending | Add sorting, page jump, and a consolidated results toolbar | api-collection-query | | n |
 | core-result-grouping | feature | pending | Group repetitive collection results by source or similarity | api-collection-query | | n |
-| core-metadata-scheduling | refactor | pending | Prioritize visible bookmarks and bound metadata refresh work | api-collection-query | 0005 | n |
 | core-command-palette | feature | pending | Add Cmd+K and Ctrl+K search, navigation, and actions | api-search-index | | n |
 | core-state-url | feature | pending | Persist collection query, facets, sorting, and page state in the URL | core-filter-chips, core-results-sorting | | n |
 | core-saved-views | feature | pending | Save named combinations of filters, sorting, and queries | core-state-url | | n |
