@@ -1,9 +1,26 @@
-"""Bookmark repository tests."""
+"""Bookmark repository tests.
+
+Test plan
+=========
+
+core-metadata-backfill.sweep (bookmarks needing metadata):
+- primary: a bookmark with no metadata row and one with an elapsed
+  `retry_after` are both returned; a bookmark with fresh metadata is not.
+- edge: `limit` bounds the number of rows returned even when more
+  bookmarks need metadata.
+"""
+
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from pydantic import ValidationError
 
-from link_hoarder.core.models import BookmarkCreate, BookmarkUpdate
+from link_hoarder.core.models import (
+    BookmarkCreate,
+    BookmarkMetadataRecord,
+    BookmarkUpdate,
+    MetadataStatus,
+)
 from link_hoarder.core.repository import BookmarkRepository, DuplicateBookmarkError
 
 
@@ -88,3 +105,58 @@ def test_bookmark_rejects_invalid_url() -> None:
     """Given a non-URL string, bookmark validation rejects the input."""
     with pytest.raises(ValidationError):
         BookmarkCreate(url="not-a-url", title="Invalid")
+
+
+def test_list_needing_metadata_finds_missing_and_stale_rows(
+    repository: BookmarkRepository,
+) -> None:
+    """Given mixed metadata states, the query returns only bookmarks needing a refresh."""
+    missing = repository.create(
+        BookmarkCreate(url="https://missing.example/", title="Missing")
+    )
+    fresh = repository.create(
+        BookmarkCreate(url="https://fresh.example/", title="Fresh")
+    )
+    stale = repository.create(
+        BookmarkCreate(url="https://stale.example/", title="Stale")
+    )
+    now = datetime.now(UTC)
+    repository.save_metadata(
+        BookmarkMetadataRecord(
+            bookmark_id=fresh.id,
+            source_url=fresh.url,
+            status=MetadataStatus.READY,
+            refreshed_at=now,
+            retry_after=now + timedelta(days=7),
+        )
+    )
+    repository.save_metadata(
+        BookmarkMetadataRecord(
+            bookmark_id=stale.id,
+            source_url=stale.url,
+            status=MetadataStatus.FAILED,
+            refreshed_at=now - timedelta(hours=2),
+            retry_after=now - timedelta(hours=1),
+        )
+    )
+
+    needing = repository.list_needing_metadata(limit=10)
+
+    ids = {bookmark.id for bookmark in needing}
+    assert missing.id in ids
+    assert stale.id in ids
+    assert fresh.id not in ids
+
+
+def test_list_needing_metadata_respects_the_limit(
+    repository: BookmarkRepository,
+) -> None:
+    """Given more missing-metadata bookmarks than the limit, only the limit is returned."""
+    for index in range(5):
+        repository.create(
+            BookmarkCreate(url=f"https://example.com/{index}", title=f"B{index}")
+        )
+
+    needing = repository.list_needing_metadata(limit=2)
+
+    assert len(needing) == 2

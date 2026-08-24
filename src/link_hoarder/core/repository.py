@@ -5,7 +5,7 @@ from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
-from sqlalchemy import String, cast, func
+from sqlalchemy import String, cast, func, or_
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.pool import NullPool
@@ -95,6 +95,42 @@ class BookmarkRepository:
             try:
                 record = result.first()
                 return self._read(record) if record is not None else None
+            finally:
+                result.close()
+
+    def list_needing_metadata(self, *, limit: int) -> list[BookmarkRead]:
+        """List bookmarks with no metadata row, or an elapsed `retry_after`.
+
+        The bookmarks table is left-joined to its metadata row on their
+        shared primary key, so one query finds both cases: an absent row
+        (`bookmark_id IS NULL`) and an elapsed `retry_after`. Both join
+        columns are primary keys, so the join needs no added index. Rows
+        are ordered by id, so a bounded `limit` reads a stable prefix
+        instead of the whole table.
+        """
+        # Stored timestamps are always UTC but naive (SQLite drops the
+        # offset on write), so the comparison bound must also be naive UTC.
+        now = datetime.now(UTC).replace(tzinfo=None)
+        statement = (
+            select(BookmarkRecord)
+            .join(
+                BookmarkMetadataRecord,
+                col(BookmarkMetadataRecord.bookmark_id) == col(BookmarkRecord.id),
+                isouter=True,
+            )
+            .where(
+                or_(
+                    col(BookmarkMetadataRecord.bookmark_id).is_(None),
+                    col(BookmarkMetadataRecord.retry_after) <= now,
+                )
+            )
+            .order_by(col(BookmarkRecord.id))
+            .limit(limit)
+        )
+        with self.session() as session:
+            result = session.exec(statement)
+            try:
+                return [self._read(record) for record in result.all()]
             finally:
                 result.close()
 

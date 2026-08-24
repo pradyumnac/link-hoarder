@@ -9,6 +9,7 @@ import threading
 import time
 from collections.abc import Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from html.parser import HTMLParser
 from io import BytesIO
@@ -52,6 +53,24 @@ _ICON_RELATIONS = frozenset(
 # crowded out by a large import or collection scan.
 _MAX_PENDING_REFRESHES = 200
 _MAX_BACKFILL_PENDING = 100
+
+# Bound on the in-process backoff kept for a bookmark whose failure record
+# could not be written to the database (`core-metadata-failure.memory`).
+# Without this cap, a bookmark stuck failing both the metadata write and the
+# failure-record write would grow the map forever. Sized well above the
+# pending-work caps above, because a failing database can back up more ids
+# than are ever queued at once.
+_MAX_FAILURE_BACKOFF_ENTRIES = 1000
+
+# Sweep cadence for the idle-backlog sweeper (`core-metadata-backfill.sweep`).
+# A batch is queued as bulk backlog work, so it never crowds out visible
+# work; see `queue_backfill`. A full batch means the backlog likely still
+# has more rows, so the next sweep follows almost immediately. An empty
+# batch means the backlog is drained, so the sweeper backs off to a slow
+# idle poll instead of hammering the database on a live system.
+_SWEEP_BATCH_SIZE = 200
+_SWEEP_ACTIVE_POLL_SECONDS = 1.0
+_SWEEP_IDLE_POLL_SECONDS = 300.0
 
 _LOGGER = structlog.get_logger(__name__)
 
@@ -391,12 +410,37 @@ def _sanitize_image(content: bytes, *, maximum_size: tuple[int, int]) -> bytes:
 
 
 class BookmarkAssetAvailability(BaseModel):
-    """Cached presentation assets available for one bookmark."""
+    """Cached thumbnail availability for one bookmark.
+
+    A favicon has no field here. The favicon route always has a safe
+    response: a cached file when one exists, or a locally generated SVG
+    fallback otherwise (`generated_domain_icon`). No caller branches on
+    favicon presence, so checking the filesystem for it up front would be
+    pure waste on every collection page.
+    """
 
     model_config = ConfigDict(frozen=True)
 
-    has_favicon: bool = False
     has_thumbnail: bool = False
+
+
+@dataclass
+class _PendingEntry:
+    """Bookkeeping for one bookmark's queued or in-flight refresh.
+
+    `token` names the submission that currently owns this entry. A worker
+    must match its own token against this field, under the lock, before it
+    does any work (`core-metadata-promotion`). A visible request can
+    promote a bookmark still queued as backfill by giving the entry a new
+    token and switching `backfill` to false; the superseded worker then
+    finds a token mismatch and becomes a silent no-op. `claimed` becomes
+    true the moment a worker accepts its token, which blocks any later
+    promotion, because the real work is already running by then.
+    """
+
+    token: int
+    backfill: bool
+    claimed: bool = False
 
 
 class BookmarkMetadataService:
@@ -419,6 +463,14 @@ class BookmarkMetadataService:
     backfill work therefore use separate executors. Visible work never
     waits for a worker that backfill work holds.
 
+    Promotion (`core-metadata-promotion`): a bookmark already queued for
+    backfill, but not yet running, is moved onto the visible executor the
+    moment a visible request names it, instead of waiting behind the rest
+    of the backfill queue. `_pending` therefore stores a `_PendingEntry`
+    per bookmark id, not a bare id, so it can record which queue owns the
+    work and whether it has started. Exactly one worker ever does the real
+    work for one bookmark id; see `_PendingEntry` and `_submit`.
+
     Retirement scoping (`core-metadata-retirement`): a deleted bookmark's
     in-flight refresh must not write files or a metadata row after
     `purge_assets` runs, but the id must be free to refresh normally if a
@@ -431,6 +483,24 @@ class BookmarkMetadataService:
     right before writing and silently discards its result on a mismatch.
     The entry is removed once the in-flight worker finishes, so nothing
     about a deleted bookmark is retained once its refresh has settled.
+
+    Undurable-failure backoff (`core-metadata-failure.memory`): if a
+    failure cannot even be recorded to the database, `_failure_backoff`
+    holds a short-lived in-process retry time for that bookmark id, so
+    admission (`_needs_refresh`) does not retry it on every request while
+    the database stays unavailable. It is bounded by
+    `_MAX_FAILURE_BACKOFF_ENTRIES` and cleared once a durable record is
+    written for the id.
+
+    Idle-backlog sweeper (`core-metadata-backfill.sweep`): a daemon thread
+    periodically asks the repository for a bounded batch of bookmarks
+    needing metadata and queues it through `queue_backfill`, so bookmarks
+    with no metadata row are eventually filled even if the user never
+    looks at their page. It runs its first sweep immediately at startup,
+    stays on `_SWEEP_ACTIVE_POLL_SECONDS` while it keeps finding full
+    batches, and backs off to `_SWEEP_IDLE_POLL_SECONDS` once the backlog
+    is empty. `queue_backfill`'s existing admission checks make repeated
+    sweeps idempotent.
     """
 
     def __init__(
@@ -440,6 +510,7 @@ class BookmarkMetadataService:
         *,
         fetcher: MetadataFetcher | None = None,
         enabled: bool = True,
+        sweep_enabled: bool = True,
     ) -> None:
         self._repository = repository
         self._cache_path = cache_path.expanduser().resolve()
@@ -460,12 +531,24 @@ class BookmarkMetadataService:
             if enabled
             else None
         )
-        self._pending: set[int] = set()
+        self._pending: dict[int, _PendingEntry] = {}
+        self._pending_token_counter = 0
         self._active_generation: dict[int, int] = {}
+        self._failure_backoff: dict[int, datetime] = {}
         self._lock = threading.Lock()
+        self._sweep_stop = threading.Event()
+        self._sweep_thread: threading.Thread | None = None
+        if enabled and sweep_enabled:
+            self._sweep_thread = threading.Thread(
+                target=self._sweep_loop, name="metadata-sweep", daemon=True
+            )
+            self._sweep_thread.start()
 
     def close(self) -> None:
         """Stop queued metadata work during application shutdown."""
+        self._sweep_stop.set()
+        if self._sweep_thread is not None:
+            self._sweep_thread.join(timeout=5.0)
         for executor in (self._backfill_executor, self._executor):
             if executor is not None:
                 executor.shutdown(wait=True, cancel_futures=True)
@@ -499,10 +582,6 @@ class BookmarkMetadataService:
         for bookmark in bookmarks:
             cached = cached_map.get(bookmark.id)
             availability[bookmark.id] = BookmarkAssetAvailability(
-                has_favicon=self._verified_asset_path(
-                    cached.favicon_file if cached is not None else None
-                )
-                is not None,
                 has_thumbnail=self._verified_asset_path(
                     cached.thumbnail_file if cached is not None else None
                 )
@@ -589,6 +668,8 @@ class BookmarkMetadataService:
                 now,
                 generation,
             )
+            return
+        self._clear_failure_backoff(bookmark.id)
 
     def purge_assets(self, bookmark_id: int) -> None:
         """Remove cached files and cancel in-flight work for a deleted bookmark."""
@@ -638,22 +719,41 @@ class BookmarkMetadataService:
 
     def _submit(self, bookmark: BookmarkRead, *, cap: int, backfill: bool) -> None:
         with self._lock:
-            if bookmark.id in self._pending:
-                return
-            if len(self._pending) >= cap:
-                _LOGGER.warning(
-                    "bookmark_metadata_queue_full",
-                    bookmark_id=bookmark.id,
-                    pending=len(self._pending),
-                    cap=cap,
+            existing = self._pending.get(bookmark.id)
+            if existing is not None:
+                # Only a visible request finding a not-yet-running backfill
+                # entry is promotable; every other combination (a duplicate
+                # request, or work that has already started) is a no-op.
+                promotable = existing.backfill and not backfill and not existing.claimed
+                if not promotable:
+                    return
+                token = self._next_pending_token()
+                existing.token = token
+                existing.backfill = False
+            else:
+                if len(self._pending) >= cap:
+                    _LOGGER.warning(
+                        "bookmark_metadata_queue_full",
+                        bookmark_id=bookmark.id,
+                        pending=len(self._pending),
+                        cap=cap,
+                    )
+                    return
+                token = self._next_pending_token()
+                self._pending[bookmark.id] = _PendingEntry(
+                    token=token, backfill=backfill
                 )
-                return
-            self._pending.add(bookmark.id)
             generation = self._active_generation.get(bookmark.id, 0)
             self._active_generation[bookmark.id] = generation
-        executor = self._backfill_executor if backfill else self._executor
+            target_backfill = self._pending[bookmark.id].backfill
+        executor = self._backfill_executor if target_backfill else self._executor
         if executor is not None:
-            executor.submit(self._refresh_and_release, bookmark, generation)
+            executor.submit(self._refresh_and_release, bookmark, generation, token)
+
+    def _next_pending_token(self) -> int:
+        """Return a fresh submission token. Callers must hold `self._lock`."""
+        self._pending_token_counter += 1
+        return self._pending_token_counter
 
     def _record_failure(
         self,
@@ -702,7 +802,9 @@ class BookmarkMetadataService:
                 bookmark_id=bookmark.id,
                 reason=store_error.__class__.__name__,
             )
+            self._set_failure_backoff(bookmark.id, now + interval)
             return
+        self._clear_failure_backoff(bookmark.id)
         _LOGGER.warning(
             "bookmark_metadata_fetch_failed",
             bookmark_id=bookmark.id,
@@ -711,23 +813,72 @@ class BookmarkMetadataService:
             retry_after_seconds=interval.total_seconds(),
         )
 
-    @staticmethod
     def _needs_refresh(
-        bookmark: BookmarkRead, cached: BookmarkMetadataRecord | None
+        self, bookmark: BookmarkRead, cached: BookmarkMetadataRecord | None
     ) -> bool:
+        with self._lock:
+            backoff_until = self._failure_backoff.get(bookmark.id)
+            if backoff_until is not None:
+                if backoff_until > datetime.now(UTC):
+                    return False
+                # The backoff has expired; evict it now instead of waiting
+                # for the next `_set_failure_backoff` sweep.
+                del self._failure_backoff[bookmark.id]
         return (
             cached is None
             or cached.source_url != bookmark.url
             or _as_utc(cached.retry_after) <= datetime.now(UTC)
         )
 
-    def _refresh_and_release(self, bookmark: BookmarkRead, generation: int) -> None:
+    def _set_failure_backoff(self, bookmark_id: int, retry_after: datetime) -> None:
+        """Record an in-process retry time for a failure that could not be persisted.
+
+        Bounded by `_MAX_FAILURE_BACKOFF_ENTRIES`: expired entries are
+        evicted first, and a new id is dropped, with a warning, if the map
+        is still full afterward.
+        """
+        with self._lock:
+            now = datetime.now(UTC)
+            expired = [
+                key for key, value in self._failure_backoff.items() if value <= now
+            ]
+            for key in expired:
+                del self._failure_backoff[key]
+            if (
+                bookmark_id not in self._failure_backoff
+                and len(self._failure_backoff) >= _MAX_FAILURE_BACKOFF_ENTRIES
+            ):
+                _LOGGER.warning(
+                    "bookmark_metadata_failure_backoff_full",
+                    bookmark_id=bookmark_id,
+                    entries=len(self._failure_backoff),
+                )
+                return
+            self._failure_backoff[bookmark_id] = retry_after
+
+    def _clear_failure_backoff(self, bookmark_id: int) -> None:
+        with self._lock:
+            self._failure_backoff.pop(bookmark_id, None)
+
+    def _refresh_and_release(
+        self, bookmark: BookmarkRead, generation: int, token: int
+    ) -> None:
+        with self._lock:
+            entry = self._pending.get(bookmark.id)
+            if entry is None or entry.token != token:
+                # A visible request promoted this bookmark to the visible
+                # executor after this task was queued. The new owner does
+                # the work and the cleanup below; this run touches nothing.
+                return
+            entry.claimed = True
         try:
             self._refresh_with_generation(bookmark, generation)
         finally:
             with self._lock:
-                self._pending.discard(bookmark.id)
-                self._active_generation.pop(bookmark.id, None)
+                entry = self._pending.get(bookmark.id)
+                if entry is not None and entry.token == token:
+                    self._pending.pop(bookmark.id, None)
+                    self._active_generation.pop(bookmark.id, None)
 
     def _store_asset(
         self, bookmark_id: int, kind: str, content: bytes | None
@@ -750,6 +901,49 @@ class BookmarkMetadataService:
         temporary.write_bytes(content)
         temporary.replace(path)
         return filename
+
+    def _sweep_loop(self) -> None:
+        """Repeatedly queue backfill work for bookmarks needing metadata.
+
+        Runs on a daemon thread until `close()` sets `_sweep_stop`. The
+        first sweep runs immediately, so a fresh start with a large backlog
+        does not wait for the idle poll interval before doing anything.
+        """
+        while not self._sweep_stop.is_set():
+            try:
+                found = self._sweep_once()
+            except Exception as error:  # noqa: BLE001 - the sweeper must never crash
+                _LOGGER.error(
+                    "bookmark_metadata_sweep_failed", reason=error.__class__.__name__
+                )
+                found = 0
+            self._sweep_stop.wait(_sweep_delay_seconds(found))
+
+    def _sweep_once(self) -> int:
+        """Queue one bounded batch of bookmarks needing metadata.
+
+        Returns the batch size, so the caller can decide the next delay.
+        Idempotent: `queue_backfill` already skips a bookmark that is
+        pending or whose cached metadata is still fresh.
+        """
+        bookmarks = self._repository.list_needing_metadata(limit=_SWEEP_BATCH_SIZE)
+        if bookmarks:
+            self.queue_backfill(bookmarks)
+        return len(bookmarks)
+
+
+def _sweep_delay_seconds(found: int) -> float:
+    """Return the sweep wait after a batch of `found` bookmarks was queued.
+
+    A full batch means the backlog likely still has more rows, so the next
+    sweep should follow almost immediately. Anything less means the
+    backlog is drained for now, so the sweeper backs off to the idle poll.
+    """
+    return (
+        _SWEEP_ACTIVE_POLL_SECONDS
+        if found >= _SWEEP_BATCH_SIZE
+        else _SWEEP_IDLE_POLL_SECONDS
+    )
 
 
 def _next_retry_after_failure(
