@@ -32,6 +32,8 @@
 - Save the page size and default collection view in browser-local storage.
 - Open a modal dialog to create a bookmark.
 - Use purpose-specific SVG buttons to add a bookmark and import bookmark HTML.
+- Scale desktop collection navigation between 260 px and 360 px.
+- Fit gallery columns to the available results width.
 - Use labeled icon buttons to edit, delete, close controls, and dismiss alerts.
 - Select an accent color in Settings and save it in browser-local storage.
 - Match Add, Import, Settings, and Notifications backgrounds and use the accent color on hover.
@@ -99,6 +101,8 @@
 - Show the import summary when an import has no warnings.
 - Send only the final browser search query when the user types multiple characters quickly.
 - Keep header controls present at 320 px and prevent overlap at desktop widths.
+- Keep the centered workspace at or below 3400 px on 4K screens.
+- Keep each gallery card at a readable minimum width.
 - Show the Test UI selector in the compact header only when A/B mode is active.
 - Hide the browser import modal on initial load.
 - Keep all bookmark actions available in list and gallery views.
@@ -145,6 +149,7 @@
 - Keep one collection view selected when the user selects the active view again.
 - Keep one Library destination selected when the user selects the active destination again.
 - Keep the narrow-screen navigation closed until the user opens it.
+- Keep the mobile drawer breakpoint independent from desktop navigation width.
 - Close folder results when focus leaves the folder control.
 - Close the narrow-screen navigation when the user selects the backdrop.
 - Disable folder and tag controls when the loaded collection has no applicable values.

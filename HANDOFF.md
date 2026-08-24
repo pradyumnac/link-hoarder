@@ -4,7 +4,7 @@ Store unresolved session findings in this file. Move each finding to its permane
 
 ## Execution state
 
-`main` contains the accepted compact-header and collection-navigation redesigns.
+`main` contains the accepted compact-header, collection-navigation, and wide-layout redesigns.
 The worktree is clean after the accepted changes.
 
 The local ignored `stack/.env` sets `LINK_HOARDER_AB_ENABLED=true`.

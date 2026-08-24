@@ -67,6 +67,8 @@ Alerts and status notices also have a close icon.
 ## Layout
 
 The interface adapts to mobile, tablet, desktop, wide desktop, and 4K screens.
-Wide layouts show more bookmark cards while text keeps a readable width.
+The centered workspace stays at or below 3400 px.
+Desktop collection navigation scales from 260 px to 360 px.
+Gallery columns fit the available results width while each card keeps a readable minimum width.
 
 See [Browser settings](configuration.md#browser-settings) for saved display settings.

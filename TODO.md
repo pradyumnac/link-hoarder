@@ -11,9 +11,7 @@ Task conventions: `todo-md-lite` skill. Shipped work is in `CHANGELOG.md`.
 
 | ID | Type | Status | Task | Depends | ADR | Triage |
 | --- | --- | --- | --- | --- | --- | --- |
-| core-mobile-navigation | feature | pending | Replace mobile folder navigation | | | n |
-| core-wide-layout | design | pending | Optimize collection layout for wide screens | | | n |
-| core-folder-navigation | refactor | pending | Simplify desktop and mobile folder navigation | core-mobile-navigation | | n |
+| core-folder-navigation | refactor | pending | Simplify desktop and mobile folder navigation | | | n |
 | core-filter-chips | feature | pending | Add removable active-filter chips | core-folder-navigation | | n |
 | core-state-url | feature | pending | Persist collection state in the URL | core-filter-chips | | n |
 | core-results-sorting | feature | pending | Add sorting and a consolidated results toolbar | core-state-url | | n |
