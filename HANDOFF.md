@@ -6,8 +6,8 @@ Store unresolved session findings in this file. Move each finding to its permane
 
 | Rail ID | Task | Status |
 | --- | --- | --- |
-| 1 | Establish the accepted A/B infrastructure as the main redesign baseline. | active |
-| 2 | Replace the hero with a compact application header and primary search. | pending |
+| 1 | Establish the accepted A/B infrastructure as the main redesign baseline. | done |
+| 2 | Replace the hero with a compact application header and primary search. | active |
 | 3 | Restructure collection information architecture around user tasks. | pending |
 | 4 | Replace mobile folder navigation with an opt-in drawer or bottom sheet. | pending |
 | 5 | Simplify desktop and mobile folder navigation. | pending |
