@@ -31,12 +31,46 @@ core-metadata-retirement (generation-scoped retirement):
   (no permanent suppression).
 - edge: `purge_assets` with no in-flight work for that id is a no-op
   beyond deleting cached files (no generation entry created).
+
+core-metadata-promotion (visible request promotes a queued backfill):
+- primary: a bookmark queued for backfill but not yet running is
+  promoted to the visible executor by a visible request, and fetched
+  exactly once (not once per queue).
+- alternate: a bookmark whose backfill refresh has already started is
+  not promoted; the visible request is a no-op and no duplicate fetch
+  happens.
+- negative: a bookmark already pending as visible work is unaffected by
+  a later backfill request for the same id.
+
+core-metadata-failure.memory (in-process backoff for undurable failures):
+- primary: when both the metadata write and its failure-record write
+  fail, the next admission attempt (`queue_refresh`) is blocked by the
+  in-process backoff instead of refetching.
+- alternate: an expired backoff entry is evicted lazily and no longer
+  blocks admission.
+- edge: the backoff map is bounded by `_MAX_FAILURE_BACKOFF_ENTRIES`
+  even under more failures than the cap.
+
+core-metadata-backfill.sweep (idle-backlog sweeper):
+- primary: bookmarks with no metadata row are found and queued at
+  service startup, without the caller ever calling `queue_backfill`.
+- alternate: a repeated sweep over an already-fresh backlog queues
+  nothing new (idempotent).
+- edge: the sweep delay backs off to the idle poll on an empty batch
+  and stays on the active poll for a full batch.
+- edge: `close()` stops the sweep thread promptly and does not start it
+  at all when `enabled=False`.
+
+api-availability-favicon (no favicon filesystem check):
+- primary: `asset_availability` never calls `_verified_asset_path` for
+  a favicon filename, even when a favicon is cached.
 """
 
 import socket
 import threading
 import time
 from collections.abc import Callable, Mapping, Sequence
+from datetime import UTC, datetime, timedelta
 from io import BytesIO
 from pathlib import Path
 from urllib.parse import SplitResult, urlsplit
@@ -519,7 +553,11 @@ def test_purge_assets_cancels_an_in_flight_refresh_for_the_purged_id(
     """Given an in-flight refresh, purge_assets stops it from writing a row or files."""
     fetcher = BlockingFetcher()
     service = BookmarkMetadataService(
-        repository, tmp_path / "cache", fetcher=fetcher, enabled=True
+        repository,
+        tmp_path / "cache",
+        fetcher=fetcher,
+        enabled=True,
+        sweep_enabled=False,
     )
     bookmark = repository.create(
         BookmarkCreate(url="https://example.com", title="Example")
@@ -587,7 +625,11 @@ def test_queue_refresh_many_issues_one_list_metadata_call(tmp_path: Path) -> Non
     try:
         fetcher = SuccessfulFetcher(_png())
         service = BookmarkMetadataService(
-            repository, tmp_path / "cache", fetcher=fetcher, enabled=True
+            repository,
+            tmp_path / "cache",
+            fetcher=fetcher,
+            enabled=True,
+            sweep_enabled=False,
         )
         bookmarks = [
             repository.create(
@@ -626,7 +668,6 @@ def test_asset_availability_issues_one_list_metadata_call(tmp_path: Path) -> Non
         availability = service.asset_availability(bookmarks)
 
         assert repository.list_metadata_calls == 1
-        assert all(item.has_favicon for item in availability.values())
         assert all(item.has_thumbnail for item in availability.values())
         service.close()
     finally:
@@ -654,7 +695,11 @@ def test_a_javascript_bookmark_is_never_queued(
     """Given a bookmarklet URL, no refresh work is queued for it."""
     fetcher = BlockingFetcher()
     service = BookmarkMetadataService(
-        repository, tmp_path / "cache", fetcher=fetcher, enabled=True
+        repository,
+        tmp_path / "cache",
+        fetcher=fetcher,
+        enabled=True,
+        sweep_enabled=False,
     )
     bookmark = repository.create(
         BookmarkCreate(url="javascript:void(0)", title="Bookmarklet")
@@ -673,7 +718,11 @@ def test_queue_refresh_many_drops_work_past_the_cap(
     monkeypatch.setattr(metadata_module, "_MAX_PENDING_REFRESHES", 2)
     fetcher = BlockingFetcher()
     service = BookmarkMetadataService(
-        repository, tmp_path / "cache", fetcher=fetcher, enabled=True
+        repository,
+        tmp_path / "cache",
+        fetcher=fetcher,
+        enabled=True,
+        sweep_enabled=False,
     )
     bookmarks = [
         repository.create(
@@ -707,7 +756,11 @@ def test_queue_backfill_reserves_headroom_for_visible_work(
     monkeypatch.setattr(metadata_module, "_MAX_BACKFILL_PENDING", 2)
     fetcher = BlockingFetcher()
     service = BookmarkMetadataService(
-        repository, tmp_path / "cache", fetcher=fetcher, enabled=True
+        repository,
+        tmp_path / "cache",
+        fetcher=fetcher,
+        enabled=True,
+        sweep_enabled=False,
     )
     bookmarks = [
         repository.create(
@@ -836,7 +889,11 @@ def test_backfill_does_not_hold_workers_needed_by_visible_work(tmp_path: Path) -
     )
     fetcher = BlockingFetcher()
     service = BookmarkMetadataService(
-        repository, tmp_path / "cache", fetcher=fetcher, enabled=True
+        repository,
+        tmp_path / "cache",
+        fetcher=fetcher,
+        enabled=True,
+        sweep_enabled=False,
     )
     try:
         service.queue_backfill(backlog)
@@ -849,3 +906,300 @@ def test_backfill_does_not_hold_workers_needed_by_visible_work(tmp_path: Path) -
     finally:
         fetcher.release.set()
         service.close()
+
+
+# -- core-metadata-promotion --------------------------------------------------
+
+
+def test_a_queued_backfill_bookmark_is_promoted_by_a_visible_request(
+    repository: BookmarkRepository, tmp_path: Path
+) -> None:
+    """Given a bookmark queued for backfill, a visible request promotes and fetches it once."""
+    fetcher = BlockingFetcher()
+    service = BookmarkMetadataService(
+        repository,
+        tmp_path / "cache",
+        fetcher=fetcher,
+        enabled=True,
+        sweep_enabled=False,
+    )
+    holder = repository.create(
+        BookmarkCreate(url="https://holder.example/", title="Holder")
+    )
+    target = repository.create(
+        BookmarkCreate(url="https://target.example/", title="Target")
+    )
+
+    # The single backfill worker is busy on `holder`, so `target` stays
+    # queued behind it (not yet running) as backfill.
+    service.queue_backfill([holder])
+    assert _wait_until(lambda: holder.url in fetcher.requested_urls)
+    service.queue_backfill([target])
+    assert service._pending[target.id].backfill is True
+    assert service._pending[target.id].claimed is False
+
+    service.queue_refresh(target)  # a visible request should promote it
+
+    assert _wait_until(lambda: target.url in fetcher.requested_urls)
+    assert service._pending[target.id].backfill is False
+    fetcher.release.set()
+    service.close()
+
+    assert fetcher.requested_urls.count(target.url) == 1
+
+
+def test_a_backfill_refresh_already_running_is_not_promoted(
+    repository: BookmarkRepository, tmp_path: Path
+) -> None:
+    """Given a backfill refresh already running, a visible request does not duplicate it."""
+    fetcher = BlockingFetcher()
+    service = BookmarkMetadataService(
+        repository,
+        tmp_path / "cache",
+        fetcher=fetcher,
+        enabled=True,
+        sweep_enabled=False,
+    )
+    bookmark = repository.create(
+        BookmarkCreate(url="https://example.com/", title="Example")
+    )
+
+    service.queue_backfill([bookmark])
+    assert _wait_until(lambda: bookmark.url in fetcher.requested_urls)
+    assert _wait_until(lambda: service._pending[bookmark.id].claimed is True)
+
+    service.queue_refresh(bookmark)  # already running; must not be promoted
+
+    assert service._pending[bookmark.id].backfill is True
+    fetcher.release.set()
+    service.close()
+
+    assert fetcher.requested_urls.count(bookmark.url) == 1
+
+
+def test_a_visible_pending_bookmark_ignores_a_later_backfill_request(
+    repository: BookmarkRepository, tmp_path: Path
+) -> None:
+    """Given a bookmark already pending as visible work, a backfill request is a no-op."""
+    fetcher = BlockingFetcher()
+    service = BookmarkMetadataService(
+        repository,
+        tmp_path / "cache",
+        fetcher=fetcher,
+        enabled=True,
+        sweep_enabled=False,
+    )
+    bookmark = repository.create(
+        BookmarkCreate(url="https://example.com/", title="Example")
+    )
+
+    service.queue_refresh(bookmark)
+    assert _wait_until(lambda: bookmark.url in fetcher.requested_urls)
+
+    service.queue_backfill([bookmark])
+
+    assert service._pending[bookmark.id].backfill is False
+    fetcher.release.set()
+    service.close()
+
+    assert fetcher.requested_urls.count(bookmark.url) == 1
+
+
+# -- core-metadata-failure.memory ----------------------------------------------
+
+
+def test_an_unrecordable_failure_backs_off_the_next_admission(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Given a metadata write and its failure-record write that both fail, the next admission backs off."""
+    repository = _counting_repository(tmp_path)
+    bookmark = repository.create(
+        BookmarkCreate(url="https://example.com/", title="Example")
+    )
+    fetcher = SuccessfulFetcher(_png())
+    service = BookmarkMetadataService(
+        repository,
+        tmp_path / "cache",
+        fetcher=fetcher,
+        enabled=True,
+        sweep_enabled=False,
+    )
+
+    def failing_save(record: BookmarkMetadataRecord) -> None:
+        raise BookmarkStorageError("The bookmark metadata could not be stored.")
+
+    monkeypatch.setattr(repository, "save_metadata", failing_save)
+
+    service.queue_refresh(bookmark)
+    assert _wait_until(lambda: fetcher.calls == 1)
+    assert _wait_until(lambda: bookmark.id not in service._pending)
+    assert repository.get_metadata(bookmark.id) is None
+    assert bookmark.id in service._failure_backoff
+
+    service.queue_refresh(bookmark)  # would refetch immediately without the backoff
+
+    assert bookmark.id not in service._pending
+    assert fetcher.calls == 1
+    service.close()
+
+
+def test_an_expired_backoff_entry_is_evicted_and_stops_blocking_refresh(
+    tmp_path: Path,
+) -> None:
+    """Given an expired backoff entry, admission evicts it and no longer blocks the bookmark."""
+    repository = _counting_repository(tmp_path)
+    bookmark = repository.create(
+        BookmarkCreate(url="https://example.com/", title="Example")
+    )
+    service = BookmarkMetadataService(repository, tmp_path / "cache", enabled=False)
+    service._set_failure_backoff(bookmark.id, datetime.now(UTC) - timedelta(seconds=1))
+
+    assert service._needs_refresh(bookmark, None) is True
+    assert bookmark.id not in service._failure_backoff
+    service.close()
+
+
+def test_failure_backoff_is_bounded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Given more failures than the cap, the in-process backoff never grows past it."""
+    monkeypatch.setattr(metadata_module, "_MAX_FAILURE_BACKOFF_ENTRIES", 3)
+    repository = _counting_repository(tmp_path)
+    service = BookmarkMetadataService(repository, tmp_path / "cache", enabled=False)
+    future = datetime.now(UTC) + timedelta(hours=1)
+
+    for bookmark_id in range(10):
+        service._set_failure_backoff(bookmark_id, future)
+
+    assert len(service._failure_backoff) <= 3
+    service.close()
+
+
+# -- core-metadata-backfill.sweep ----------------------------------------------
+
+
+def test_sweeper_finds_and_queues_bookmarks_with_no_metadata_row(
+    repository: BookmarkRepository, tmp_path: Path
+) -> None:
+    """Given bookmarks with no metadata row, the sweeper finds and queues them at startup."""
+    bookmarks = [
+        repository.create(
+            BookmarkCreate(url=f"https://example.com/{index}", title=f"B{index}")
+        )
+        for index in range(3)
+    ]
+    fetcher = SuccessfulFetcher(_png())
+    service = BookmarkMetadataService(
+        repository, tmp_path / "cache", fetcher=fetcher, enabled=True
+    )
+
+    assert _wait_until(
+        lambda: all(repository.get_metadata(b.id) is not None for b in bookmarks)
+    )
+    service.close()
+
+
+def test_sweeper_is_idempotent_across_repeated_runs(
+    repository: BookmarkRepository, tmp_path: Path
+) -> None:
+    """Given a backlog the startup sweep already filled, a repeated sweep queues nothing new."""
+    bookmark = repository.create(
+        BookmarkCreate(url="https://example.com/", title="Example")
+    )
+    fetcher = SuccessfulFetcher(_png())
+    service = BookmarkMetadataService(
+        repository, tmp_path / "cache", fetcher=fetcher, enabled=True
+    )
+    assert _wait_until(lambda: repository.get_metadata(bookmark.id) is not None)
+    assert _wait_until(lambda: bookmark.id not in service._pending)
+    calls_after_startup_sweep = fetcher.calls
+
+    found = service._sweep_once()  # a manual repeat while the backlog is fresh
+
+    assert found == 0
+    assert fetcher.calls == calls_after_startup_sweep
+    service.close()
+
+
+def test_sweep_delay_backs_off_when_idle_and_stays_active_on_a_full_batch() -> None:
+    """Given an empty batch, the sweep delay is the idle poll; a full batch stays active."""
+    assert (
+        metadata_module._sweep_delay_seconds(0)
+        == metadata_module._SWEEP_IDLE_POLL_SECONDS
+    )
+    assert (
+        metadata_module._sweep_delay_seconds(metadata_module._SWEEP_BATCH_SIZE)
+        == metadata_module._SWEEP_ACTIVE_POLL_SECONDS
+    )
+
+
+def test_sweeper_stops_cleanly_on_close(
+    repository: BookmarkRepository, tmp_path: Path
+) -> None:
+    """Given close(), the sweep thread stops promptly without blocking shutdown."""
+    service = BookmarkMetadataService(
+        repository, tmp_path / "cache", fetcher=SuccessfulFetcher(_png()), enabled=True
+    )
+    assert service._sweep_thread is not None
+
+    started = time.monotonic()
+    service.close()
+    elapsed = time.monotonic() - started
+
+    assert elapsed < 5.0
+    assert not service._sweep_thread.is_alive()
+
+
+def test_sweeper_does_not_start_when_metadata_refresh_is_disabled(
+    repository: BookmarkRepository, tmp_path: Path
+) -> None:
+    """Given enabled=False, no sweep thread is started."""
+    service = BookmarkMetadataService(repository, tmp_path / "cache", enabled=False)
+
+    assert service._sweep_thread is None
+    service.close()
+
+
+def test_sweep_enabled_false_does_not_start_the_sweep_thread(
+    repository: BookmarkRepository, tmp_path: Path
+) -> None:
+    """Given sweep_enabled=False, no sweep thread is started even when refresh is enabled."""
+    service = BookmarkMetadataService(
+        repository, tmp_path / "cache", enabled=True, sweep_enabled=False
+    )
+
+    assert service._sweep_thread is None
+    service.close()
+
+
+# -- api-availability-favicon --------------------------------------------------
+
+
+def test_asset_availability_performs_no_favicon_filesystem_check(
+    repository: BookmarkRepository, tmp_path: Path
+) -> None:
+    """Given cached metadata, asset_availability never checks a favicon file on disk."""
+    fetcher = SuccessfulFetcher(_png())
+    service = BookmarkMetadataService(
+        repository, tmp_path / "cache", fetcher=fetcher, enabled=False
+    )
+    bookmark = repository.create(
+        BookmarkCreate(url="https://example.com", title="Example")
+    )
+    service.refresh(bookmark)
+    cached = repository.get_metadata(bookmark.id)
+    assert cached is not None and cached.favicon_file is not None
+
+    checked_filenames: list[str | None] = []
+    original = service._verified_asset_path
+
+    def spy(filename: str | None) -> Path | None:
+        checked_filenames.append(filename)
+        return original(filename)
+
+    service._verified_asset_path = spy  # type: ignore[method-assign]
+
+    service.asset_availability([bookmark])
+
+    assert checked_filenames == [cached.thumbnail_file]
+    service.close()
