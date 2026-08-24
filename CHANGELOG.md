@@ -37,7 +37,7 @@
 
 ### Fixed
 
-- Add cache headers and ETags to bookmark asset routes (api-asset-caching, ADR-0005).
+- Give bookmark asset routes a separate rate limit, cache headers, and ETags (api-asset-caching, ADR-0005).
 - Read bookmark presentation metadata for one page in one query (api-metadata-query-load, ADR-0005).
 - Queue metadata for exactly the bookmarks an import creates, at every library size (import-metadata-refresh, ADR-0005).
 - Normalize destination errors and back off repeated metadata failures (core-metadata-failure-cache, ADR-0005).
