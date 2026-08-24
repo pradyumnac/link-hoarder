@@ -33,12 +33,17 @@ _MAX_HTML_BYTES = 512 * 1024
 _MAX_IMAGE_BYTES = 5 * 1024 * 1024
 _MAX_IMAGE_DIMENSION = 4096
 _MAX_IMAGE_PIXELS = 16_000_000
-_MAX_REDIRECTS = 3
+_MAX_REDIRECTS = 5
 _REFRESH_AFTER = timedelta(days=7)
 _RETRY_AFTER_FAILURE = timedelta(hours=1)
 _MAX_RETRY_AFTER_FAILURE = timedelta(hours=24)
 _ALLOWED_IMAGE_FORMATS = frozenset({"GIF", "ICO", "JPEG", "PNG", "WEBP"})
 _REDIRECT_STATUSES = frozenset({301, 302, 303, 307, 308})
+# Link relations that can name a site icon. A site often declares several,
+# and the first one is not always an image this application can decode.
+_ICON_RELATIONS = frozenset(
+    {"icon", "shortcut", "apple-touch-icon", "apple-touch-icon-precomposed"}
+)
 
 # Hard cap on the total number of bookmarks with queued or in-flight
 # refresh work. Bulk backlog work (`queue_backfill`) may only fill a
@@ -89,7 +94,7 @@ class MetadataFetcher(Protocol):
 class _HeadMetadataParser(HTMLParser):
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
-        self.favicon_url: str | None = None
+        self.favicon_urls: list[str] = []
         self.thumbnail_url: str | None = None
         self.in_head = True
 
@@ -101,9 +106,10 @@ class _HeadMetadataParser(HTMLParser):
             return
         values = {name.lower(): value for name, value in attrs if value is not None}
         if tag.lower() == "link":
-            relations = values.get("rel", "").lower().split()
-            if "icon" in relations and self.favicon_url is None:
-                self.favicon_url = values.get("href")
+            relations = set(values.get("rel", "").lower().split())
+            href = values.get("href")
+            if href and relations & _ICON_RELATIONS:
+                self.favicon_urls.append(href)
         elif (
             tag.lower() == "meta"
             and values.get("property", "").lower() == "og:image"
@@ -117,29 +123,47 @@ class SecureMetadataFetcher:
 
     def fetch(self, url: str) -> FetchedMetadata:
         """Fetch one HTML head and its selected presentation images."""
-        page = self._request(url, max_bytes=_MAX_HTML_BYTES, accept="text/html")
+        # A large page is read up to the byte limit and then parsed. The
+        # head holds every value this fetcher needs and comes first, so a
+        # long body must not discard the whole response.
+        page = self._request(
+            url,
+            max_bytes=_MAX_HTML_BYTES,
+            accept="text/html",
+            allow_truncation=True,
+        )
         if "html" not in page.content_type.lower():
             raise MetadataFetchError("The bookmark did not return HTML.")
         parser = _HeadMetadataParser()
         parser.feed(page.body.decode("utf-8", errors="replace"))
 
-        favicon_url = (
-            urljoin(page.final_url, parser.favicon_url)
-            if parser.favicon_url
-            else urljoin(page.final_url, "/favicon.ico")
-        )
+        candidates = [
+            urljoin(page.final_url, candidate)
+            for candidate in _ordered_icon_candidates(parser.favicon_urls)
+        ]
+        candidates.append(urljoin(page.final_url, "/favicon.ico"))
         thumbnail_url = (
             urljoin(page.final_url, parser.thumbnail_url)
             if parser.thumbnail_url
             else None
         )
-        favicon = self._fetch_image(favicon_url, maximum_size=(128, 128))
+        favicon = self._first_available_image(candidates, maximum_size=(128, 128))
         thumbnail = (
             self._fetch_image(thumbnail_url, maximum_size=(1200, 630))
             if thumbnail_url is not None
             else None
         )
         return FetchedMetadata(favicon=favicon, thumbnail=thumbnail)
+
+    def _first_available_image(
+        self, urls: Sequence[str], *, maximum_size: tuple[int, int]
+    ) -> bytes | None:
+        """Return the first candidate icon this application can decode."""
+        for candidate in dict.fromkeys(urls):
+            image = self._fetch_image(candidate, maximum_size=maximum_size)
+            if image is not None:
+                return image
+        return None
 
     def _fetch_image(self, url: str, *, maximum_size: tuple[int, int]) -> bytes | None:
         try:
@@ -156,7 +180,14 @@ class SecureMetadataFetcher:
             )
             return None
 
-    def _request(self, url: str, *, max_bytes: int, accept: str) -> RemoteResponse:
+    def _request(
+        self,
+        url: str,
+        *,
+        max_bytes: int,
+        accept: str,
+        allow_truncation: bool = False,
+    ) -> RemoteResponse:
         current = url
         for redirect_count in range(_MAX_REDIRECTS + 1):
             parsed, address, port = _validated_destination(current)
@@ -166,6 +197,7 @@ class SecureMetadataFetcher:
                 port,
                 max_bytes=max_bytes,
                 accept=accept,
+                allow_truncation=allow_truncation,
             )
             if status in _REDIRECT_STATUSES:
                 location = headers.get("location")
@@ -183,6 +215,22 @@ class SecureMetadataFetcher:
                 final_url=current,
             )
         raise MetadataBlockedError("The redirect limit was exceeded.")
+
+
+def _ordered_icon_candidates(hrefs: Sequence[str]) -> list[str]:
+    """Order declared icons so decodable raster images come first.
+
+    This application cannot decode SVG, so an SVG icon is tried last. A
+    site that declares only an SVG icon still gets its `/favicon.ico`
+    fallback from the caller.
+    """
+    raster = [href for href in hrefs if not _is_svg_href(href)]
+    vector = [href for href in hrefs if _is_svg_href(href)]
+    return raster + vector
+
+
+def _is_svg_href(href: str) -> bool:
+    return urlsplit(href).path.lower().endswith(".svg")
 
 
 def _validated_destination(url: str) -> tuple[SplitResult, str, int]:
@@ -240,6 +288,7 @@ def _request_once(
     *,
     max_bytes: int,
     accept: str,
+    allow_truncation: bool = False,
 ) -> tuple[int, Mapping[str, str], bytes]:
     hostname = parsed.hostname
     if not hostname:
@@ -296,9 +345,12 @@ def _request_once(
             chunks.append(chunk)
             size += len(chunk)
             if size > max_bytes:
-                raise MetadataBlockedError(
-                    "The metadata response exceeded its size limit."
-                )
+                if not allow_truncation:
+                    raise MetadataBlockedError(
+                        "The metadata response exceeded its size limit."
+                    )
+                chunks[-1] = chunks[-1][: len(chunks[-1]) - (size - max_bytes)]
+                break
         return response.status, headers, b"".join(chunks)
     except (OSError, ssl.SSLError, http.client.HTTPException) as error:
         raise MetadataFetchError("The metadata request failed.") from error

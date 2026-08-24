@@ -232,8 +232,14 @@ def test_secure_fetcher_parses_only_selected_head_assets(
     image = _png()
     requested: list[str] = []
 
-    def request(url: str, *, max_bytes: int, accept: str) -> RemoteResponse:
-        del max_bytes, accept
+    def request(
+        url: str,
+        *,
+        max_bytes: int,
+        accept: str,
+        allow_truncation: bool = False,
+    ) -> RemoteResponse:
+        del max_bytes, accept, allow_truncation
         requested.append(url)
         if url == "https://example.com/path":
             return RemoteResponse(
@@ -282,6 +288,7 @@ def test_secure_fetcher_validates_each_redirect(
         *,
         max_bytes: int,
         accept: str,
+        allow_truncation: bool = False,
     ) -> tuple[int, Mapping[str, str], bytes]:
         del parsed, address, port, max_bytes, accept
         return responses.pop(0)
@@ -315,6 +322,7 @@ def test_secure_fetcher_stops_redirect_loops(
         *,
         max_bytes: int,
         accept: str,
+        allow_truncation: bool = False,
     ) -> tuple[int, Mapping[str, str], bytes]:
         del parsed, address, port, max_bytes, accept
         return 302, {"location": "https://example.com/again"}, b""
