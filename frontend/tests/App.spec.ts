@@ -512,17 +512,25 @@ describe("App", () => {
     // cards keep a consistent height. It falls back to the brand mark instead
     // of leaving an empty region.
     expect(wrapper.find(".bookmark-thumbnail").exists()).toBe(true);
-    // The fallback reuses the app's own brand mark asset (same src as the
-    // header logo), which keeps it same-origin under the CSP.
+    // The fallback reuses the bookmark's own favicon, which the API backs
+    // with a generated per-domain icon, so each card stays distinct.
     expect(wrapper.get(".bookmark-thumbnail-fallback").attributes("src")).toBe(
-      wrapper.get(".brand-mark").attributes("src"),
+      "/api/v1/bookmarks/2/favicon",
     );
   });
 
   /** Given a bookmark with no thumbnail at all, the gallery card still reserves a media area. */
   it("shows a fallback media area for bookmarks without a thumbnail", async () => {
     vi.mocked(api.listBookmarks).mockResolvedValue({
-      items: [{ ...bookmark, id: 3, thumbnail_url: null, url: "https://example.com/reading" }],
+      items: [
+        {
+          ...bookmark,
+          id: 3,
+          thumbnail_url: null,
+          favicon_url: "/api/v1/bookmarks/3/favicon",
+          url: "https://example.com/reading",
+        },
+      ],
       limit: 1000,
       offset: 0,
       total: 1,
@@ -533,7 +541,26 @@ describe("App", () => {
 
     expect(wrapper.findAll(".bookmark-thumbnail img")).toHaveLength(1);
     expect(wrapper.get(".bookmark-thumbnail-fallback").attributes("src")).toBe(
-      wrapper.get(".brand-mark").attributes("src"),
+      "/api/v1/bookmarks/3/favicon",
+    );
+  });
+
+  /** Given a bookmark with neither a thumbnail nor a favicon, the card falls back to the brand mark. */
+  it("falls back to the brand mark when a bookmark has no favicon", async () => {
+    vi.mocked(api.listBookmarks).mockResolvedValue({
+      items: [{ ...bookmark, id: 5, thumbnail_url: null, url: "https://example.com/plain" }],
+      limit: 1000,
+      offset: 0,
+      total: 1,
+    });
+    const wrapper = mount(App);
+    await flushPromises();
+    await wrapper.get('[aria-label="Show gallery view"]').trigger("click");
+
+    // A dynamic binding keeps the public asset path as written, while the
+    // header uses a static src that the bundler may inline.
+    expect(wrapper.get(".bookmark-thumbnail-fallback").attributes("src")).toBe(
+      "/link-hoarder.svg",
     );
   });
 

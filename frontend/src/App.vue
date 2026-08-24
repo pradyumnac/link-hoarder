@@ -994,10 +994,13 @@ onBeforeUnmount(() => {
                   loading="lazy"
                   @error="hideThumbnail(bookmark.id)"
                 />
+                <!-- The favicon is already loaded for the row icon, so this
+                     costs no extra request. The API falls back to a generated
+                     per-domain icon, which keeps each card distinct. -->
                 <img
                   v-else
                   class="bookmark-thumbnail-fallback"
-                  src="/link-hoarder.svg"
+                  :src="bookmark.favicon_url ?? '/link-hoarder.svg'"
                   alt=""
                   width="28"
                   height="28"
