@@ -24,6 +24,8 @@
 - Open a modal dialog to create a bookmark.
 - Use Unicode icon buttons to add, search, import, edit, delete, close controls, and dismiss alerts.
 - Type a folder query and select a matching folder from the dropdown.
+- Route a new browser session to the stable UI through the A/B proxy.
+- Select the staging UI from the top bar and keep that selection for the browser session.
 
 ## Alternate flows
 
@@ -51,6 +53,8 @@
 - Keep the Add, Search, and Import icons to the right of the search box.
 - Keep the Settings icon beside the Notifications icon.
 - Clear the folder query to return to all folders.
+- Select the stable UI after the browser session uses the staging UI.
+- Select a UI with the `version` query parameter.
 
 ## Edge flows
 
@@ -76,6 +80,9 @@
 - Close a bookmark modal without saving its values.
 - Dismiss error and status messages independently.
 - Match folder queries without case sensitivity.
+- Start the A/B stack when no stable image exists.
+- Rebuild only the staging image from the active redesign branch.
+- Use the stable UI when the version cookie is absent.
 
 ## Negative flows
 
@@ -102,3 +109,5 @@
 - Keep invalid bookmark form values in the open modal for correction.
 - Keep icon-only actions understandable when their visible text is not available.
 - Show an empty dropdown state when no folder matches the typed query.
+- Ignore an invalid version query value or session cookie and use the stable UI.
+- Keep the stable frontend available when a staging deployment fails.

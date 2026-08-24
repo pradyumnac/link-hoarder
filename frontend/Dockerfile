@@ -6,7 +6,8 @@ RUN npm ci
 
 COPY docs/openapi.json /workspace/docs/openapi.json
 COPY frontend ./
-RUN npm run build
+ARG VITE_AB_SWITCHING_ENABLED=false
+RUN VITE_AB_SWITCHING_ENABLED="$VITE_AB_SWITCHING_ENABLED" npm run build
 
 FROM nginx:1.29-alpine
 

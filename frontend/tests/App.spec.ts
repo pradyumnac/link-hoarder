@@ -30,6 +30,7 @@ const bookmark: api.Bookmark = {
 describe("App", () => {
   beforeEach(() => {
     window.localStorage.clear();
+    document.cookie = "link_hoarder_variant=; Max-Age=0; Path=/";
     vi.clearAllMocks();
     vi.mocked(api.listBookmarks).mockReset().mockResolvedValue({
       items: [bookmark],
@@ -65,6 +66,28 @@ describe("App", () => {
     expect(wrapper.get(".bookmark-list").classes()).toContain("gallery-view");
     expect(wrapper.findAll(".bookmark-card")).toHaveLength(25);
     expect(wrapper.get(".pagination").text()).toContain("Page 1 of 2");
+  });
+
+  /** Given no version cookie, the top bar identifies stable as the active UI. */
+  it("uses the stable UI as the default variant", async () => {
+    const wrapper = mount(App);
+    await flushPromises();
+
+    const switcher = wrapper.get('[aria-label="UI version"]');
+    expect(switcher.get('[aria-current="page"]').text()).toBe("Stable");
+    expect(switcher.findAll("a")[1]!.attributes("href")).toContain("version=staging");
+  });
+
+  /** Given a staging session cookie, the top bar identifies staging as the active UI. */
+  it("restores the staging UI selection from the session cookie", async () => {
+    document.cookie = "link_hoarder_variant=staging; Path=/; SameSite=Strict";
+
+    const wrapper = mount(App);
+    await flushPromises();
+
+    const switcher = wrapper.get('[aria-label="UI version"]');
+    expect(switcher.get('[aria-current="page"]').text()).toBe("Staging");
+    expect(switcher.findAll("a")[0]!.attributes("href")).toContain("version=stable");
   });
 
   /** Given changed settings, the page applies and stores the new values. */
@@ -284,7 +307,7 @@ describe("App", () => {
 
     expect(wrapper.text()).toContain("Reader");
     expect(wrapper.find(".bookmarklet").text()).toBe("Bookmarklet");
-    expect(wrapper.find("a").exists()).toBe(false);
+    expect(wrapper.find(".bookmark-card a").exists()).toBe(false);
   });
 
   /** Given the collection, the create action opens a bookmark modal. */

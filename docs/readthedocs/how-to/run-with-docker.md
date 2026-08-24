@@ -36,3 +36,6 @@ Stop the stack:
 ```console
 mise run stack-down
 ```
+
+The normal stack runs one frontend container. A/B switching is an opt-in test feature.
+Use [A/B Switching](ab-switching.md) to test a redesign branch.

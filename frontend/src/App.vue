@@ -14,8 +14,10 @@ const FETCH_SIZE = 1000;
 const PAGE_SIZE_OPTIONS = [10, 25, 50] as const;
 const SEARCH_DELAY_MS = 300;
 const SETTINGS_KEY = "link-hoarder.browser-settings";
+const VARIANT_COOKIE = "link_hoarder_variant";
 
 type BookmarkType = "all" | "bookmark" | "bookmarklet";
+type UiVariant = "stable" | "staging";
 type PageSize = (typeof PAGE_SIZE_OPTIONS)[number];
 type ViewMode = "gallery" | "list";
 
@@ -58,6 +60,22 @@ function loadBrowserSettings(): BrowserSettings {
   return { defaultView: "list", pageSize: 10 };
 }
 
+function loadUiVariant(): UiVariant {
+  const variant = document.cookie
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(`${VARIANT_COOKIE}=`))
+    ?.split("=", 2)[1];
+  return variant === "staging" ? "staging" : "stable";
+}
+
+function variantUrl(variant: UiVariant): string {
+  const target = new URL(window.location.href);
+  target.searchParams.set("version", variant);
+  return `${target.pathname}${target.search}${target.hash}`;
+}
+
+const abSwitchingEnabled = __AB_SWITCHING_ENABLED__;
 const initialSettings = loadBrowserSettings();
 const bookmarks = ref<Bookmark[]>([]);
 const offset = ref(0);
@@ -68,6 +86,7 @@ const folderComboboxOpen = ref(false);
 const selectedTag = ref("");
 const selectedType = ref<BookmarkType>("all");
 const settings = reactive<BrowserSettings>({ ...initialSettings });
+const uiVariant = ref<UiVariant>(loadUiVariant());
 const viewMode = ref<ViewMode>(initialSettings.defaultView);
 const error = ref("");
 const notice = ref("");
@@ -392,6 +411,19 @@ onBeforeUnmount(() => {
       <h1>Link Hoarder</h1>
       <p>Search, classify, and import bookmarks from one private workspace.</p>
       <div class="notifications">
+        <nav v-if="abSwitchingEnabled" class="variant-switcher" aria-label="UI version">
+          <span>Test UI</span>
+          <a
+            :class="{ active: uiVariant === 'stable' }"
+            :href="variantUrl('stable')"
+            :aria-current="uiVariant === 'stable' ? 'page' : undefined"
+          >Stable</a>
+          <a
+            :class="{ active: uiVariant === 'staging' }"
+            :href="variantUrl('staging')"
+            :aria-current="uiVariant === 'staging' ? 'page' : undefined"
+          >Staging</a>
+        </nav>
         <button
           class="settings-button icon-button"
           type="button"

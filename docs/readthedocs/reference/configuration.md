@@ -50,3 +50,12 @@ These settings apply only to the current browser profile.
 | Default view | `list` or `gallery` | `list` | Select the initial collection view. |
 
 The web interface uses the defaults when the stored value is missing or invalid.
+
+## UI variant session
+
+The local Docker proxy stores the selected test variant in the `link_hoarder_variant` cookie.
+The valid values are `stable` and `staging`. The cookie expires when the browser session ends.
+The proxy uses `stable` when the cookie is missing or invalid.
+
+The `version` query parameter selects a variant and replaces the session cookie value.
+This setting applies only to the local Docker A/B test workflow.

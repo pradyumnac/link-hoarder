@@ -1,0 +1,76 @@
+x-frontend: &frontend
+  init: true
+  stop_grace_period: 10s
+  depends_on:
+    api:
+      condition: service_healthy
+  volumes:
+    - link-hoarder-secrets:/run/link-hoarder:ro
+  restart: unless-stopped
+
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: stack/Dockerfile
+    image: link-hoarder-api:local
+    init: true
+    stop_grace_period: 10s
+    environment:
+      LINK_HOARDER_API_KEY: ${LINK_HOARDER_API_KEY:-}
+      LINK_HOARDER_LOG_LEVEL: ${LINK_HOARDER_LOG_LEVEL:-INFO}
+    volumes:
+      - link-hoarder-data:/data
+      - link-hoarder-secrets:/run/link-hoarder
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          python -c "import urllib.request;
+          key=open('/run/link-hoarder/api-key').read();
+          request=urllib.request.Request('http://127.0.0.1:8000/health',headers={'X-API-Key':key});
+          urllib.request.urlopen(request,timeout=2).read()"
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  frontend-stable:
+    <<: *frontend
+    image: link-hoarder-frontend:stable
+
+  frontend-staging:
+    <<: *frontend
+    build:
+      context: ..
+      dockerfile: frontend/Dockerfile
+      args:
+        VITE_AB_SWITCHING_ENABLED: "true"
+    image: link-hoarder-frontend:staging
+
+  proxy:
+    build:
+      context: ..
+      dockerfile: stack/proxy/Dockerfile
+    image: link-hoarder-proxy:local
+    init: true
+    stop_grace_period: 10s
+    depends_on:
+      frontend-stable:
+        condition: service_started
+      frontend-staging:
+        condition: service_started
+    ports:
+      - "127.0.0.1:${LINK_HOARDER_PORT:-8080}:80"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1/"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+volumes:
+  link-hoarder-data:
+  link-hoarder-secrets:

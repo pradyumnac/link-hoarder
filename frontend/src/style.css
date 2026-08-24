@@ -17,6 +17,11 @@ button:disabled { cursor: not-allowed; opacity: 0.45; }
 .hero > p:last-of-type { max-width: 620px; margin: 0; color: #587068; font-size: 1.1rem; }
 .eyebrow { margin: 0; color: #b64d2e; font-size: 0.74rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; }
 .notifications { position: absolute; top: 24px; right: 0; z-index: 10; display: flex; align-items: center; gap: 8px; }
+.variant-switcher { display: flex; align-items: center; padding: 4px; border: 1px solid #c9c5b7; border-radius: 9px; background: #fffef9; }
+.variant-switcher span { padding: 0 7px; color: #68746f; font-size: 0.7rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
+.variant-switcher a { display: inline-flex; align-items: center; min-height: 36px; margin: 0; padding: 7px 9px; border-radius: 7px; color: #52635c; font-size: 0.76rem; font-weight: 750; text-decoration: none; }
+.variant-switcher a.active { color: white; background: #0d684d; }
+.variant-switcher a:focus-visible { outline: 3px solid rgba(23, 121, 89, 0.25); outline-offset: 2px; }
 .settings-button { padding: 10px 13px; border: 1px solid #c9c5b7; border-radius: 9px; color: #0d4f3d; background: #fffef9; font-weight: 750; }
 .notification-button { position: relative; display: grid; width: 46px; height: 46px; padding: 11px; border: 1px solid #c9c5b7; border-radius: 50%; color: #0d4f3d; background: #fffef9; }
 .notification-button svg { width: 100%; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2; }
@@ -130,6 +135,7 @@ code { font-size: 0.77rem; }
   .notifications { top: 16px; }
   .notification-panel { width: calc(100vw - 20px); max-height: calc(100vh - 90px); overflow-y: auto; }
   .settings-panel { right: 0; }
+  .variant-switcher span { display: none; }
   .panel { padding: 20px; }
   .import-form { grid-template-columns: 1fr; }
   .collection-heading, .list-view .bookmark-card { align-items: stretch; flex-direction: column; }
@@ -144,6 +150,9 @@ code { font-size: 0.77rem; }
 @media (max-width: 480px) {
   .shell { width: calc(100% - 16px); padding-top: 16px; }
   .hero { padding-top: 64px; }
+  .notifications { gap: 5px; }
+  .variant-switcher { padding: 3px; }
+  .variant-switcher a { min-height: 34px; padding: 6px 7px; font-size: 0.7rem; }
   .hero h1 { font-size: clamp(2.6rem, 17vw, 4rem); }
   .hero > p:last-of-type { font-size: 1rem; }
   .panel { padding: 16px; border-radius: 14px; }

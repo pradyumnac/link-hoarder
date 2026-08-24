@@ -153,7 +153,22 @@ Confirm that text lines remain readable on wide layouts.
 Confirm that all controls remain visible and usable.
 Confirm that the page does not have horizontal scrolling.
 
-## 7. Build the package
+## 7. Test A/B switching
+
+Set `LINK_HOARDER_AB_ENABLED=false` in `stack/.env`. Run `mise run stack-up`.
+Confirm that one frontend container runs and the top bar has no Test UI control.
+
+Set `LINK_HOARDER_AB_ENABLED=true`. Restart the stack.
+Confirm that stable, staging, and proxy containers run.
+
+Open `/?version=staging`. Confirm that the response sets the `link_hoarder_variant` session cookie.
+Open `/` again. Confirm that the Staging control remains active.
+Select Stable. Confirm that Stable remains active after another request.
+
+Run `mise run ab-stage` from a test branch. Confirm that the stable image identifier does not change.
+Set the feature flag to `false`. Confirm that `mise run ab-stage` stops with an opt-in error.
+
+## 8. Build the package
 
 ```console
 uv build
@@ -161,7 +176,7 @@ uv build
 
 Confirm that `dist/` contains a wheel and a source distribution. Git ignores both files.
 
-## 8. Install and test the wheel
+## 9. Install and test the wheel
 
 Install the local wheel into the project virtual environment:
 
@@ -186,7 +201,7 @@ Confirm the package is in the project virtual environment:
 uv pip show --python .venv link-hoarder
 ```
 
-## 9. Remove test data
+## 10. Remove test data
 
 Linux or macOS:
 

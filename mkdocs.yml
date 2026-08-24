@@ -33,6 +33,7 @@ nav:
       - Export bookmarks: how-to/export-bookmarks.md
       - Manage bookmarks in the web interface: how-to/manage-bookmarks-web.md
       - Run with Docker Compose: how-to/run-with-docker.md
+      - A/B Switching: how-to/ab-switching.md
       - Publish on Read the Docs: how-to/publish-read-the-docs.md
   - Reference:
       - Overview: reference/index.md

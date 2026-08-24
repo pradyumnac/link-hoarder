@@ -7,4 +7,5 @@ Use a how-to guide when you have a specific task.
 - [Export bookmarks](export-bookmarks.md).
 - [Manage bookmarks in the web interface](manage-bookmarks-web.md).
 - [Run with Docker Compose](run-with-docker.md).
+- [A/B Switching](ab-switching.md).
 - [Publish on Read the Docs](publish-read-the-docs.md).

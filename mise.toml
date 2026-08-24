@@ -87,16 +87,28 @@ description = "Run the authenticated API"
 run = "uv run link-hoarder api"
 
 [tasks.serve-web]
-description = "Build and serve the integrated web application"
-run = "docker compose -f stack/compose.yaml up --build"
+description = "Build and serve both UI variants"
+run = "stack/ab-stack.sh serve"
 
 [tasks.stack-up]
-description = "Build and start the Docker stack"
-run = "docker compose -f stack/compose.yaml up --build -d"
+description = "Build and start the A/B test stack"
+run = "stack/ab-stack.sh up"
 
 [tasks.stack-down]
-description = "Stop the Docker stack"
-run = "docker compose -f stack/compose.yaml down"
+description = "Stop the A/B test stack"
+run = "stack/ab-stack.sh down"
+
+[tasks.ab-stage]
+description = "Deploy the active branch as the staging UI"
+run = "stack/ab-stack.sh deploy-staging"
+
+[tasks.ab-promote]
+description = "Build the active branch as the stable UI"
+run = "stack/ab-stack.sh promote"
+
+[tasks.ab-reset]
+description = "Reset the staging UI to the stable image"
+run = "stack/ab-stack.sh reset-staging"
 
 [tasks.changelog]
 description = "Generate the changelog from Conventional Commits"

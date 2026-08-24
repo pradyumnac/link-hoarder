@@ -17,6 +17,12 @@ Each icon has an accessible label.
 
 Search also runs after the user stops typing.
 
+## Test UI selection
+
+The opt-in A/B stack shows Stable and Staging controls in the top bar.
+The normal interface does not show these test controls.
+See [A/B Switching](../how-to/ab-switching.md) for the redesign workflow.
+
 ## Collection navigation
 
 The left pane provides these controls:

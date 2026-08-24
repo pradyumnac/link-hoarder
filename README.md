@@ -168,6 +168,7 @@ mise run stack-down
 ```
 
 See the [Docker Compose guide](docs/readthedocs/how-to/run-with-docker.md) for more options and PowerShell commands.
+Use the opt-in [A/B Switching guide](docs/readthedocs/how-to/ab-switching.md) to test one UI redesign branch.
 
 ## HTTP API
 
