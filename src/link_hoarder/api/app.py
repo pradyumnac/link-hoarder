@@ -1,5 +1,6 @@
 """Authenticated FastAPI application."""
 
+import hashlib
 import secrets
 import tempfile
 from collections.abc import AsyncIterator, Awaitable, Callable
@@ -46,6 +47,7 @@ from link_hoarder.core.repository import BookmarkRepository, DuplicateBookmarkEr
 _API_KEY = APIKeyHeader(name="X-API-Key", auto_error=False)
 _API_PREFIX = "/api/v1"
 _MAX_PROFILE_BYTES = 16 * 1024 * 1024
+_ASSET_CACHE_CONTROL = "private, max-age=3600, must-revalidate"
 
 
 class Health(BaseModel):
@@ -127,7 +129,8 @@ def create_app(
         call_next: Callable[[Request], Awaitable[Response]],
     ) -> Response:
         response = await call_next(request)
-        response.headers["Cache-Control"] = "no-store"
+        if "cache-control" not in response.headers:
+            response.headers["Cache-Control"] = "no-store"
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
@@ -189,21 +192,22 @@ def create_app(
         return bookmark
 
     @router.get("/bookmarks/{bookmark_id}/favicon", tags=["bookmarks"])
-    def get_bookmark_favicon(bookmark_id: int) -> Response:
+    def get_bookmark_favicon(bookmark_id: int, request: Request) -> Response:
         bookmark = repository.get(bookmark_id)
         if bookmark is None:
             raise _not_found(bookmark_id)
         metadata.queue_refresh(bookmark)
         path = metadata.asset_path(bookmark_id, "favicon")
         if path is not None:
-            return FileResponse(path, media_type="image/png")
-        return Response(
-            content=generated_domain_icon(bookmark.url),
+            return _cached_file_response(request, path, media_type="image/png")
+        return _cached_content_response(
+            request,
+            generated_domain_icon(bookmark.url),
             media_type="image/svg+xml",
         )
 
     @router.get("/bookmarks/{bookmark_id}/thumbnail", tags=["bookmarks"])
-    def get_bookmark_thumbnail(bookmark_id: int) -> Response:
+    def get_bookmark_thumbnail(bookmark_id: int, request: Request) -> Response:
         bookmark = repository.get(bookmark_id)
         if bookmark is None:
             raise _not_found(bookmark_id)
@@ -214,7 +218,7 @@ def create_app(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="The bookmark has no cached thumbnail.",
             )
-        return FileResponse(path, media_type="image/png")
+        return _cached_file_response(request, path, media_type="image/png")
 
     @router.patch(
         "/bookmarks/{bookmark_id}",
@@ -287,6 +291,48 @@ def _present_bookmark(
             "thumbnail_url": thumbnail_url,
         }
     )
+
+
+def _cached_file_response(request: Request, path: Path, *, media_type: str) -> Response:
+    # The ETag comes from the cached file's size and modification time, not
+    # a content hash. Assets are up to 5 MiB, and this route can serve them
+    # on every bookmark render, so hashing the full file on each request
+    # would repeat the same I/O the cache is meant to avoid. `queue_refresh`
+    # always replaces a cached file through a write-then-rename, so the
+    # modification time changes on every content update.
+    stat = path.stat()
+    etag = f'"{stat.st_size:x}-{int(stat.st_mtime_ns):x}"'
+    not_modified = _not_modified_response(request, etag)
+    if not_modified is not None:
+        return not_modified
+    response: Response = FileResponse(path, media_type=media_type)
+    response.headers["ETag"] = etag
+    response.headers["Cache-Control"] = _ASSET_CACHE_CONTROL
+    return response
+
+
+def _cached_content_response(
+    request: Request, content: str, *, media_type: str
+) -> Response:
+    digest = hashlib.sha256(content.encode("utf-8")).hexdigest()
+    etag = f'"{digest}"'
+    not_modified = _not_modified_response(request, etag)
+    if not_modified is not None:
+        return not_modified
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={"ETag": etag, "Cache-Control": _ASSET_CACHE_CONTROL},
+    )
+
+
+def _not_modified_response(request: Request, etag: str) -> Response | None:
+    if request.headers.get("if-none-match") == etag:
+        return Response(
+            status_code=status.HTTP_304_NOT_MODIFIED,
+            headers={"ETag": etag, "Cache-Control": _ASSET_CACHE_CONTROL},
+        )
+    return None
 
 
 def _not_found(bookmark_id: int) -> HTTPException:

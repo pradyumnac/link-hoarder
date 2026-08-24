@@ -373,3 +373,111 @@ def test_api_list_bookmarks_metadata_query_count_does_not_grow_with_page_size(
     assert len(small.json()["items"]) == 1
     assert len(large.json()["items"]) == 50
     assert small_calls == large_calls
+
+
+# Test plan: api-asset-caching
+#   primary: a normal JSON response stays `Cache-Control: no-store`.
+#   primary: a cached favicon and a cached thumbnail are served with a
+#     private, revalidating Cache-Control and a strong ETag.
+#   alternate: a matching If-None-Match returns 304 with the same ETag and
+#     Cache-Control and an empty body, for both a cached asset and the
+#     generated SVG fallback icon.
+#   negative: a 404 (missing thumbnail) response stays uncacheable.
+
+
+def test_api_json_response_is_not_cacheable(tmp_path: Path) -> None:
+    """Given an authenticated JSON request, the API keeps the response uncacheable."""
+    client = _client(tmp_path)
+
+    response = client.get(f"{_API_PREFIX}/bookmarks", headers=_HEADERS)
+
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+
+
+def test_api_missing_thumbnail_response_stays_uncacheable(tmp_path: Path) -> None:
+    """Given no cached thumbnail, the 404 response is not cacheable."""
+    client = _client(tmp_path)
+    created = client.post(
+        f"{_API_PREFIX}/bookmarks",
+        headers=_HEADERS,
+        json={"url": "https://example.com", "title": "Example"},
+    )
+
+    response = client.get(
+        f"{_API_PREFIX}/bookmarks/{created.json()['id']}/thumbnail",
+        headers=_HEADERS,
+    )
+
+    assert response.status_code == 404
+    assert response.headers["cache-control"] == "no-store"
+
+
+def test_api_generated_icon_is_cacheable_and_revalidates(tmp_path: Path) -> None:
+    """Given no cached favicon, the generated icon supports ETag revalidation."""
+    client = _client(tmp_path)
+    created = client.post(
+        f"{_API_PREFIX}/bookmarks",
+        headers=_HEADERS,
+        json={"url": "https://example.com", "title": "Example"},
+    )
+    bookmark_id = created.json()["id"]
+
+    first = client.get(
+        f"{_API_PREFIX}/bookmarks/{bookmark_id}/favicon", headers=_HEADERS
+    )
+    second = client.get(
+        f"{_API_PREFIX}/bookmarks/{bookmark_id}/favicon",
+        headers={**_HEADERS, "If-None-Match": first.headers["etag"]},
+    )
+
+    assert first.status_code == 200
+    assert first.headers["cache-control"] == "private, max-age=3600, must-revalidate"
+    assert first.headers["etag"]
+    assert second.status_code == 304
+    assert second.headers["etag"] == first.headers["etag"]
+    assert second.headers["cache-control"] == first.headers["cache-control"]
+    assert second.content == b""
+
+
+def test_api_cached_favicon_and_thumbnail_are_privately_cacheable_with_etags(
+    tmp_path: Path,
+) -> None:
+    """Given cached assets, favicon and thumbnail responses revalidate by ETag."""
+    settings = Settings(
+        database_path=tmp_path / "metadata.db",
+        metadata_cache_path=tmp_path / "metadata-cache",
+        metadata_refresh_enabled=True,
+        api_key=SecretStr(_API_KEY_VALUE),
+    )
+    with TestClient(create_app(settings, StaticMetadataFetcher())) as client:
+        client.post(
+            f"{_API_PREFIX}/bookmarks",
+            headers=_HEADERS,
+            json={"url": "https://example.com/path", "title": "Example"},
+        )
+        deadline = time.monotonic() + 2
+        listed = client.get(f"{_API_PREFIX}/bookmarks", headers=_HEADERS)
+        while listed.json()["items"][0]["thumbnail_url"] is None:
+            if time.monotonic() >= deadline:
+                pytest.fail("Metadata refresh did not finish.")
+            time.sleep(0.01)
+            listed = client.get(f"{_API_PREFIX}/bookmarks", headers=_HEADERS)
+        item = listed.json()["items"][0]
+
+        for asset_url in (item["favicon_url"], item["thumbnail_url"]):
+            first = client.get(asset_url, headers=_HEADERS)
+            second = client.get(
+                asset_url, headers={**_HEADERS, "If-None-Match": first.headers["etag"]}
+            )
+
+            assert first.status_code == 200
+            assert (
+                first.headers["cache-control"]
+                == "private, max-age=3600, must-revalidate"
+            )
+            assert first.headers["etag"]
+            assert second.status_code == 304
+            assert second.headers["etag"] == first.headers["etag"]
+            assert second.headers["cache-control"] == first.headers["cache-control"]
+            assert second.content == b""
