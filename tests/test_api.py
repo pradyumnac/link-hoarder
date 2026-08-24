@@ -12,7 +12,8 @@ from pydantic import SecretStr, ValidationError
 from link_hoarder.api.app import create_app
 from link_hoarder.api.openapi import contract_json
 from link_hoarder.core.config import Settings
-from link_hoarder.core.metadata import FetchedMetadata
+from link_hoarder.core.metadata import BookmarkMetadataService, FetchedMetadata
+from link_hoarder.core.models import BookmarkCreate
 from link_hoarder.core.repository import BookmarkRepository
 
 _API_PREFIX = "/api/v1"
@@ -481,3 +482,147 @@ def test_api_cached_favicon_and_thumbnail_are_privately_cacheable_with_etags(
             assert second.headers["etag"] == first.headers["etag"]
             assert second.headers["cache-control"] == first.headers["cache-control"]
             assert second.content == b""
+
+
+# Test plan: import-metadata-refresh
+#   primary: importing into an empty library queues metadata for exactly the
+#     bookmarks the import created.
+#   edge: importing into a library already holding more than 1000 bookmarks
+#     still queues only the newly created bookmarks, not the pre-existing
+#     ones repository.list(limit=1000) would have returned.
+#   negative: importing only duplicate bookmarks queues nothing.
+
+
+def test_api_import_queues_metadata_for_created_bookmarks_in_an_empty_library(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Given an empty library, import queues metadata for exactly the new bookmarks."""
+    queued: list[int] = []
+    original = BookmarkMetadataService.queue_refresh_many
+
+    def record_queue_refresh_many(
+        self: BookmarkMetadataService, bookmarks: object
+    ) -> None:
+        queued.extend(bookmark.id for bookmark in bookmarks)  # type: ignore[attr-defined]
+        original(self, bookmarks)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(
+        BookmarkMetadataService, "queue_refresh_many", record_queue_refresh_many
+    )
+    client = _client(tmp_path)
+    export = b"""<!DOCTYPE NETSCAPE-Bookmark-file-1>
+<DL><p><DT><A HREF="https://example.com">Example</A></DL><p>
+"""
+
+    response = client.post(
+        f"{_API_PREFIX}/imports/bookmarks-file",
+        headers={**_HEADERS, "Content-Type": "text/html"},
+        content=export,
+    )
+    created_id = client.get(
+        f"{_API_PREFIX}/bookmarks/by-url",
+        headers=_HEADERS,
+        params={"url": "https://example.com/"},
+    ).json()["id"]
+
+    assert response.status_code == 200
+    assert response.json()["imported"] == 1
+    assert queued == [created_id]
+
+
+def test_api_import_queues_only_new_bookmarks_beyond_the_list_window(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Given a library over the 1000-row list window, import queues only new rows."""
+    database_path = tmp_path / "bulk.db"
+    seed = BookmarkRepository.from_path(database_path)
+    seed.initialize()
+    try:
+        pre_existing_ids = [
+            seed.create(
+                BookmarkCreate(
+                    url=f"https://existing.example/{number}", title=f"Existing {number}"
+                )
+            ).id
+            for number in range(1005)
+        ]
+    finally:
+        seed.close()
+
+    queued: list[int] = []
+    original = BookmarkMetadataService.queue_refresh_many
+
+    def record_queue_refresh_many(
+        self: BookmarkMetadataService, bookmarks: object
+    ) -> None:
+        queued.extend(bookmark.id for bookmark in bookmarks)  # type: ignore[attr-defined]
+        original(self, bookmarks)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(
+        BookmarkMetadataService, "queue_refresh_many", record_queue_refresh_many
+    )
+    settings = Settings(
+        database_path=database_path,
+        metadata_cache_path=tmp_path / "metadata-cache",
+        metadata_refresh_enabled=False,
+        api_key=SecretStr(_API_KEY_VALUE),
+    )
+    client = TestClient(create_app(settings))
+    export = b"""<!DOCTYPE NETSCAPE-Bookmark-file-1>
+<DL><p><DT><A HREF="https://new.example">New</A></DL><p>
+"""
+
+    response = client.post(
+        f"{_API_PREFIX}/imports/bookmarks-file",
+        headers={**_HEADERS, "Content-Type": "text/html"},
+        content=export,
+    )
+    new_id = client.get(
+        f"{_API_PREFIX}/bookmarks/by-url",
+        headers=_HEADERS,
+        params={"url": "https://new.example/"},
+    ).json()["id"]
+
+    assert response.status_code == 200
+    assert response.json()["imported"] == 1
+    assert queued == [new_id]
+    assert not set(queued) & set(pre_existing_ids)
+
+
+def test_api_import_of_only_duplicates_queues_no_metadata(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Given an import where every bookmark already exists, nothing is queued."""
+    client = _client(tmp_path)
+    client.post(
+        f"{_API_PREFIX}/bookmarks",
+        headers=_HEADERS,
+        json={"url": "https://example.com", "title": "Example"},
+    )
+
+    queued: list[int] = []
+    original = BookmarkMetadataService.queue_refresh_many
+
+    def record_queue_refresh_many(
+        self: BookmarkMetadataService, bookmarks: object
+    ) -> None:
+        queued.extend(bookmark.id for bookmark in bookmarks)  # type: ignore[attr-defined]
+        original(self, bookmarks)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(
+        BookmarkMetadataService, "queue_refresh_many", record_queue_refresh_many
+    )
+    export = b"""<!DOCTYPE NETSCAPE-Bookmark-file-1>
+<DL><p><DT><A HREF="https://example.com">Example</A></DL><p>
+"""
+
+    response = client.post(
+        f"{_API_PREFIX}/imports/bookmarks-file",
+        headers={**_HEADERS, "Content-Type": "text/html"},
+        content=export,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["imported"] == 0
+    assert response.json()["skipped"] == 1
+    assert queued == []

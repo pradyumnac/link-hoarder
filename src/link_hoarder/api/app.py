@@ -26,7 +26,7 @@ from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
 
 from link_hoarder.core.config import Settings
-from link_hoarder.core.importers import import_html_export
+from link_hoarder.core.importers import import_html_export_detailed
 from link_hoarder.core.logging import configure_logging
 from link_hoarder.core.metadata import (
     BookmarkAssetAvailability,
@@ -262,14 +262,13 @@ def create_app(
         with tempfile.TemporaryDirectory() as temporary:
             profile = Path(temporary) / filename
             profile.write_bytes(content)
-            result = import_html_export(repository, profile)
-            for bookmark in repository.list(limit=1000):
-                metadata.queue_refresh(bookmark)
+            detail = import_html_export_detailed(repository, profile)
+            metadata.queue_refresh_many(detail.created)
             warnings = [
                 warning.model_copy(update={"profile": filename})
-                for warning in result.warnings
+                for warning in detail.result.warnings
             ]
-            return result.model_copy(update={"warnings": warnings})
+            return detail.result.model_copy(update={"warnings": warnings})
 
     api.include_router(router)
     return api
