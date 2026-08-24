@@ -22,6 +22,8 @@
 
 ### Changed
 
+- Bound the metadata refresh queue and reserve capacity for visible bookmarks (core-metadata-scheduling, ADR-0005).
+
 - Add secure cached bookmark icons, concise links, and gallery thumbnails (core-bookmark-presentation, ADR-0005).
 - Scale collection navigation, gallery columns, and workspace width across desktop and 4K screens (core-wide-layout).
 - Restructure collection navigation with smart destinations, source filters, and a responsive drawer (core-navigation-restructure).
@@ -34,6 +36,12 @@
 - Verify core, CLI, API, and packaging flows (test-release-gates, ADR-0001).
 
 ### Fixed
+
+- Add cache headers and ETags to bookmark asset routes (api-asset-caching, ADR-0005).
+- Read bookmark presentation metadata for one page in one query (api-metadata-query-load, ADR-0005).
+- Queue metadata for exactly the bookmarks an import creates, at every library size (import-metadata-refresh, ADR-0005).
+- Normalize destination errors and back off repeated metadata failures (core-metadata-failure-cache, ADR-0005).
+- Cancel metadata work for deleted bookmarks without suppressing reused row identifiers (core-metadata-retirement, ADR-0005).
 
 - Report browser import failures through the CLI, API, and web interface (import-warning-reporting).
 - Harden API authentication, uploads, error responses, proxy limits, and browser headers (api-security-hardening).

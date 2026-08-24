@@ -6,13 +6,7 @@ Task conventions: `todo-md-lite` skill. Shipped work is in `CHANGELOG.md`.
 
 | ID | Type | Status | Task | Depends | ADR | Triage |
 | --- | --- | --- | --- | --- | --- | --- |
-| api-asset-caching | fix | pending | Add cache headers and ETags to bookmark asset routes | | 0005 | n |
-| api-metadata-query-load | fix | pending | Eliminate repeated metadata reads from collection responses | | 0005 | n |
-| core-metadata-scheduling | refactor | pending | Bound refresh work and prioritize visible bookmarks | | 0005 | n |
-| import-metadata-refresh | fix | pending | Queue metadata for newly imported bookmarks at every library size | | 0005 | n |
-| core-metadata-failure-cache | fix | pending | Normalize destination errors and back off failed refresh jobs | | 0005 | n |
-| core-metadata-retirement | fix | pending | Remove retired-ID leaks and rowid-reuse suppression | | 0005 | n |
-| test-metadata-delivery | test | pending | Validate metadata delivery with malformed URLs and 1,500 bookmarks | api-asset-caching, api-metadata-query-load, core-metadata-scheduling, import-metadata-refresh, core-metadata-failure-cache, core-metadata-retirement | 0005 | n |
+| test-metadata-delivery | test | pending | Validate metadata delivery with malformed URLs and 1,500 bookmarks | | 0005 | n |
 
 ## Future
 
