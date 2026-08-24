@@ -1,14 +1,18 @@
 """FastAPI integration tests."""
 
+import time
+from io import BytesIO
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from PIL import Image
 from pydantic import SecretStr, ValidationError
 
 from link_hoarder.api.app import create_app
 from link_hoarder.api.openapi import contract_json
 from link_hoarder.core.config import Settings
+from link_hoarder.core.metadata import FetchedMetadata
 from link_hoarder.core.repository import BookmarkRepository
 
 _API_PREFIX = "/api/v1"
@@ -16,9 +20,26 @@ _API_KEY_VALUE = "test-key-value-with-at-least-32-characters"
 _HEADERS = {"X-API-Key": _API_KEY_VALUE}
 
 
+class StaticMetadataFetcher:
+    """Return one deterministic image without outbound network access."""
+
+    def __init__(self) -> None:
+        image = Image.new("RGB", (20, 10), "#245c4a")
+        output = BytesIO()
+        image.save(output, format="PNG")
+        self._content = output.getvalue()
+
+    def fetch(self, url: str) -> FetchedMetadata:
+        """Return the local fixture as a favicon and thumbnail."""
+        del url
+        return FetchedMetadata(favicon=self._content, thumbnail=self._content)
+
+
 def _client(tmp_path: Path) -> TestClient:
     settings = Settings(
         database_path=tmp_path / "api.db",
+        metadata_cache_path=tmp_path / "metadata-cache",
+        metadata_refresh_enabled=False,
         api_key=SecretStr(_API_KEY_VALUE),
     )
     return TestClient(create_app(settings))
@@ -94,12 +115,71 @@ def test_api_crud(tmp_path: Path) -> None:
     assert created.status_code == 201
     assert updated.json()["title"] == "Updated"
     assert listed.json() == {
-        "items": [updated.json()],
+        "items": [
+            {
+                **updated.json(),
+                "favicon_url": f"{_API_PREFIX}/bookmarks/{bookmark_id}/favicon",
+                "thumbnail_url": None,
+            }
+        ],
         "total": 1,
         "limit": 100,
         "offset": 0,
     }
     assert deleted.status_code == 204
+
+
+def test_api_serves_only_local_presentation_assets(tmp_path: Path) -> None:
+    """Given fetched metadata, the API serves sanitized images from same-origin routes."""
+    settings = Settings(
+        database_path=tmp_path / "metadata.db",
+        metadata_cache_path=tmp_path / "metadata-cache",
+        metadata_refresh_enabled=True,
+        api_key=SecretStr(_API_KEY_VALUE),
+    )
+    with TestClient(create_app(settings, StaticMetadataFetcher())) as client:
+        client.post(
+            f"{_API_PREFIX}/bookmarks",
+            headers=_HEADERS,
+            json={"url": "https://example.com/path", "title": "Example"},
+        )
+        deadline = time.monotonic() + 2
+        listed = client.get(f"{_API_PREFIX}/bookmarks", headers=_HEADERS)
+        while listed.json()["items"][0]["thumbnail_url"] is None:
+            if time.monotonic() >= deadline:
+                pytest.fail("Metadata refresh did not finish.")
+            time.sleep(0.01)
+            listed = client.get(f"{_API_PREFIX}/bookmarks", headers=_HEADERS)
+
+        item = listed.json()["items"][0]
+        favicon = client.get(item["favicon_url"], headers=_HEADERS)
+        thumbnail = client.get(item["thumbnail_url"], headers=_HEADERS)
+
+    assert item["favicon_url"].startswith(f"{_API_PREFIX}/")
+    assert item["thumbnail_url"].startswith(f"{_API_PREFIX}/")
+    assert favicon.status_code == 200
+    assert favicon.headers["content-type"] == "image/png"
+    assert thumbnail.status_code == 200
+    assert thumbnail.headers["content-type"] == "image/png"
+
+
+def test_api_uses_a_generated_icon_without_cached_metadata(tmp_path: Path) -> None:
+    """Given no cached favicon, the API serves a local generated domain icon."""
+    client = _client(tmp_path)
+    created = client.post(
+        f"{_API_PREFIX}/bookmarks",
+        headers=_HEADERS,
+        json={"url": "https://example.com", "title": "Example"},
+    )
+
+    response = client.get(
+        f"{_API_PREFIX}/bookmarks/{created.json()['id']}/favicon",
+        headers=_HEADERS,
+    )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/svg+xml"
+    assert b">E</text>" in response.content
 
 
 def test_api_paginates_filtered_bookmarks(tmp_path: Path) -> None:

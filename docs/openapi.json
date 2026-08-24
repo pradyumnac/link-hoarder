@@ -47,12 +47,12 @@
         "title": "BookmarkCreate",
         "type": "object"
       },
-      "BookmarkPage": {
-        "description": "Paginated bookmark output.",
+      "BookmarkPresentationPage": {
+        "description": "Paginated bookmark presentation output.",
         "properties": {
           "items": {
             "items": {
-              "$ref": "#/components/schemas/BookmarkRead"
+              "$ref": "#/components/schemas/BookmarkPresentationRead"
             },
             "title": "Items",
             "type": "array"
@@ -76,7 +76,92 @@
           "limit",
           "offset"
         ],
-        "title": "BookmarkPage",
+        "title": "BookmarkPresentationPage",
+        "type": "object"
+      },
+      "BookmarkPresentationRead": {
+        "description": "Bookmark output with same-origin presentation assets.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "favicon_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Favicon Url"
+          },
+          "folder": {
+            "anyOf": [
+              {
+                "maxLength": 1024,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Folder"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "source": {
+            "$ref": "#/components/schemas/BookmarkSource",
+            "default": "manual"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags",
+            "type": "array"
+          },
+          "thumbnail_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumbnail Url"
+          },
+          "title": {
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "title",
+          "id",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "BookmarkPresentationRead",
         "type": "object"
       },
       "BookmarkRead": {
@@ -436,7 +521,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/BookmarkPage"
+                  "$ref": "#/components/schemas/BookmarkPresentationPage"
                 }
               }
             },
@@ -711,6 +796,96 @@
           }
         ],
         "summary": "Update Bookmark",
+        "tags": [
+          "bookmarks"
+        ]
+      }
+    },
+    "/api/v1/bookmarks/{bookmark_id}/favicon": {
+      "get": {
+        "operationId": "get_bookmark_favicon_api_v1_bookmarks__bookmark_id__favicon_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bookmark_id",
+            "required": true,
+            "schema": {
+              "title": "Bookmark Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "summary": "Get Bookmark Favicon",
+        "tags": [
+          "bookmarks"
+        ]
+      }
+    },
+    "/api/v1/bookmarks/{bookmark_id}/thumbnail": {
+      "get": {
+        "operationId": "get_bookmark_thumbnail_api_v1_bookmarks__bookmark_id__thumbnail_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bookmark_id",
+            "required": true,
+            "schema": {
+              "title": "Bookmark Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "summary": "Get Bookmark Thumbnail",
         "tags": [
           "bookmarks"
         ]

@@ -118,6 +118,44 @@ class BookmarkPage(SQLModel):
     offset: int
 
 
+class BookmarkPresentationRead(BookmarkRead):
+    """Bookmark output with same-origin presentation assets."""
+
+    favicon_url: str | None = None
+    thumbnail_url: str | None = None
+
+
+class BookmarkPresentationPage(SQLModel):
+    """Paginated bookmark presentation output."""
+
+    items: list[BookmarkPresentationRead]
+    total: int
+    limit: int
+    offset: int
+
+
+class MetadataStatus(StrEnum):
+    """Bookmark metadata refresh result."""
+
+    READY = "ready"
+    FAILED = "failed"
+    BLOCKED = "blocked"
+
+
+class BookmarkMetadataRecord(SQLModel, table=True):
+    """SQLite bookmark metadata cache row."""
+
+    __tablename__ = "bookmark_metadata"
+
+    bookmark_id: int = Field(primary_key=True, foreign_key="bookmarks.id")
+    source_url: str = Field(max_length=2048)
+    status: MetadataStatus
+    favicon_file: str | None = Field(default=None, max_length=255)
+    thumbnail_file: str | None = Field(default=None, max_length=255)
+    refreshed_at: datetime
+    retry_after: datetime
+
+
 class ImportWarningCode(StrEnum):
     """Bookmark import warning category."""
 

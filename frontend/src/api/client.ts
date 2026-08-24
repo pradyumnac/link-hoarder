@@ -1,9 +1,10 @@
 import type { components } from "./schema";
 
-export type Bookmark = components["schemas"]["BookmarkRead"];
+export type Bookmark = components["schemas"]["BookmarkPresentationRead"];
 export type BookmarkCreate = components["schemas"]["BookmarkCreate"];
-export type BookmarkPage = components["schemas"]["BookmarkPage"];
+export type BookmarkPage = components["schemas"]["BookmarkPresentationPage"];
 export type BookmarkUpdate = components["schemas"]["BookmarkUpdate"];
+type StoredBookmark = components["schemas"]["BookmarkRead"];
 export type HtmlImportResult = components["schemas"]["HtmlImportResult"];
 
 const API_PREFIX = "/api/v1";
@@ -37,8 +38,8 @@ export function listBookmarks(
   return request<BookmarkPage>(`/bookmarks?${parameters.toString()}`);
 }
 
-export function createBookmark(bookmark: BookmarkCreate): Promise<Bookmark> {
-  return request<Bookmark>("/bookmarks", {
+export function createBookmark(bookmark: BookmarkCreate): Promise<StoredBookmark> {
+  return request<StoredBookmark>("/bookmarks", {
     body: JSON.stringify(bookmark),
     headers: { "Content-Type": "application/json" },
     method: "POST",
@@ -48,8 +49,8 @@ export function createBookmark(bookmark: BookmarkCreate): Promise<Bookmark> {
 export function updateBookmark(
   bookmarkId: number,
   bookmark: BookmarkUpdate,
-): Promise<Bookmark> {
-  return request<Bookmark>(`/bookmarks/${bookmarkId}`, {
+): Promise<StoredBookmark> {
+  return request<StoredBookmark>(`/bookmarks/${bookmarkId}`, {
     body: JSON.stringify(bookmark),
     headers: { "Content-Type": "application/json" },
     method: "PATCH",

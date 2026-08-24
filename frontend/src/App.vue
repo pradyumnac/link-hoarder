@@ -145,6 +145,8 @@ let nextLoadId = 1;
 let nextNotificationEventId = 1;
 let searchTimer: ReturnType<typeof window.setTimeout> | null = null;
 
+const failedThumbnailIds = reactive(new Set<number>());
+
 const folderOptions = computed(() =>
   [...new Set(bookmarks.value.flatMap((bookmark) => bookmark.folder ?? []))].sort(),
 );
@@ -179,16 +181,25 @@ const tagOptions = computed(() =>
   [...new Set(bookmarks.value.flatMap((bookmark) => bookmark.tags ?? []))].sort(),
 );
 const sourceOptions = computed(() => {
-  const counts = new Map<string, number>();
+  const sources = new Map<string, { count: number; faviconUrl: string | null }>();
   for (const bookmark of bookmarks.value) {
     const source = bookmarkSource(bookmark);
     if (source !== null) {
-      counts.set(source, (counts.get(source) ?? 0) + 1);
+      const current = sources.get(source);
+      sources.set(source, {
+        count: (current?.count ?? 0) + 1,
+        faviconUrl: current?.faviconUrl ?? bookmark.favicon_url ?? null,
+      });
     }
   }
-  return [...counts]
-    .filter(([, count]) => count > 5)
-    .map(([source, count]) => ({ count, label: sourceLabel(source), source }))
+  return [...sources]
+    .filter(([, value]) => value.count > 5)
+    .map(([source, value]) => ({
+      count: value.count,
+      faviconUrl: value.faviconUrl,
+      label: sourceLabel(source),
+      source,
+    }))
     .sort((left, right) => right.count - left.count || left.label.localeCompare(right.label));
 });
 const filteredBookmarks = computed(() => {
@@ -222,6 +233,21 @@ const pageCount = computed(() => Math.max(1, Math.ceil(total.value / settings.pa
 const unreadEventCount = computed(
   () => notificationEvents.value.filter((event) => event.unread).length,
 );
+
+function conciseBookmarkUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    const path = parsed.pathname.replace(/\/$/, "");
+    const visible = `${parsed.hostname}${path}`;
+    return visible.length > 56 ? `${visible.slice(0, 53)}…` : visible;
+  } catch {
+    return url;
+  }
+}
+
+function hideThumbnail(bookmarkId: number): void {
+  failedThumbnailIds.add(bookmarkId);
+}
 
 function bookmarkSource(bookmark: Bookmark): string | null {
   if (bookmark.url.toLowerCase().startsWith("javascript:")) {
@@ -847,7 +873,20 @@ onBeforeUnmount(() => {
                 type="button"
                 :data-source="source.source"
                 @click="selectSource(source.source)"
-              ><span>{{ source.label }}</span><span>{{ source.count }}</span></button>
+              >
+                <span class="source-name">
+                  <img
+                    v-if="source.faviconUrl"
+                    :src="source.faviconUrl"
+                    alt=""
+                    width="18"
+                    height="18"
+                    loading="lazy"
+                  />
+                  {{ source.label }}
+                </span>
+                <span>{{ source.count }}</span>
+              </button>
             </div>
           </details>
           <div class="sidebar-filters" aria-label="Browse bookmarks">
@@ -947,15 +986,43 @@ onBeforeUnmount(() => {
           <p v-else-if="visibleBookmarks.length === 0" class="empty">No bookmarks match this view.</p>
           <ul v-else class="bookmark-list" :class="`${viewMode}-view`">
             <li v-for="bookmark in visibleBookmarks" :key="bookmark.id" class="bookmark-card">
-              <div class="bookmark-copy">
-                <div class="title-row">
-                  <h3>{{ bookmark.title }}</h3>
-                  <span v-if="bookmark.url.startsWith('javascript:')" class="bookmarklet">Bookmarklet</span>
+              <div
+                v-if="viewMode === 'gallery' && bookmark.thumbnail_url && !failedThumbnailIds.has(bookmark.id)"
+                class="bookmark-thumbnail"
+              >
+                <img
+                  :src="bookmark.thumbnail_url"
+                  alt=""
+                  loading="lazy"
+                  @error="hideThumbnail(bookmark.id)"
+                />
+              </div>
+              <div class="bookmark-main">
+                <img
+                  v-if="bookmark.favicon_url"
+                  class="bookmark-icon"
+                  :src="bookmark.favicon_url"
+                  alt=""
+                  width="40"
+                  height="40"
+                  loading="lazy"
+                />
+                <div class="bookmark-copy">
+                  <div class="title-row">
+                    <h3>{{ bookmark.title }}</h3>
+                    <span v-if="bookmark.url.startsWith('javascript:')" class="bookmarklet">Bookmarklet</span>
+                  </div>
+                  <a
+                    v-if="!bookmark.url.startsWith('javascript:')"
+                    :href="bookmark.url"
+                    :aria-label="bookmark.url"
+                    target="_blank"
+                    rel="noreferrer"
+                  >{{ conciseBookmarkUrl(bookmark.url) }}</a>
+                  <code v-else>{{ bookmark.url }}</code>
+                  <p v-if="bookmark.folder" class="folder">{{ bookmark.folder }}</p>
+                  <div v-if="bookmark.tags?.length" class="tags"><span v-for="tag in bookmark.tags" :key="tag">{{ tag }}</span></div>
                 </div>
-                <a v-if="!bookmark.url.startsWith('javascript:')" :href="bookmark.url" target="_blank" rel="noreferrer">{{ bookmark.url }}</a>
-                <code v-else>{{ bookmark.url }}</code>
-                <p v-if="bookmark.folder" class="folder">{{ bookmark.folder }}</p>
-                <div v-if="bookmark.tags?.length" class="tags"><span v-for="tag in bookmark.tags" :key="tag">{{ tag }}</span></div>
               </div>
               <div class="actions"><button class="text-button icon-button edit-bookmark" type="button" :aria-label="`Edit ${bookmark.title}`" @click="editBookmark(bookmark)">✎</button><button class="icon-button delete-bookmark" type="button" :aria-label="`Delete ${bookmark.title}`" @click="removeBookmark(bookmark)"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14H6L5 6M10 11v5M14 11v5" /></svg></button></div>
             </li>

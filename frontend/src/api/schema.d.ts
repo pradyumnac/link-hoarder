@@ -58,6 +58,40 @@ export interface paths {
         patch: operations["update_bookmark_api_v1_bookmarks__bookmark_id__patch"];
         trace?: never;
     };
+    "/api/v1/bookmarks/{bookmark_id}/favicon": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Bookmark Favicon */
+        get: operations["get_bookmark_favicon_api_v1_bookmarks__bookmark_id__favicon_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/bookmarks/{bookmark_id}/thumbnail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Bookmark Thumbnail */
+        get: operations["get_bookmark_thumbnail_api_v1_bookmarks__bookmark_id__thumbnail_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/imports/bookmarks-file": {
         parameters: {
             query?: never;
@@ -113,18 +147,50 @@ export interface components {
             url: string;
         };
         /**
-         * BookmarkPage
-         * @description Paginated bookmark output.
+         * BookmarkPresentationPage
+         * @description Paginated bookmark presentation output.
          */
-        BookmarkPage: {
+        BookmarkPresentationPage: {
             /** Items */
-            items: components["schemas"]["BookmarkRead"][];
+            items: components["schemas"]["BookmarkPresentationRead"][];
             /** Limit */
             limit: number;
             /** Offset */
             offset: number;
             /** Total */
             total: number;
+        };
+        /**
+         * BookmarkPresentationRead
+         * @description Bookmark output with same-origin presentation assets.
+         */
+        BookmarkPresentationRead: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Favicon Url */
+            favicon_url?: string | null;
+            /** Folder */
+            folder?: string | null;
+            /** Id */
+            id: number;
+            /** @default manual */
+            source: components["schemas"]["BookmarkSource"];
+            /** Tags */
+            tags?: string[];
+            /** Thumbnail Url */
+            thumbnail_url?: string | null;
+            /** Title */
+            title: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Url */
+            url: string;
         };
         /**
          * BookmarkRead
@@ -278,7 +344,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["BookmarkPage"];
+                    "application/json": components["schemas"]["BookmarkPresentationPage"];
                 };
             };
             /** @description Validation Error */
@@ -456,6 +522,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_bookmark_favicon_api_v1_bookmarks__bookmark_id__favicon_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                bookmark_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_bookmark_thumbnail_api_v1_bookmarks__bookmark_id__thumbnail_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                bookmark_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

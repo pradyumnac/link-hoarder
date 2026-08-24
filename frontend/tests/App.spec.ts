@@ -327,6 +327,8 @@ describe("App", () => {
       ...bookmark,
       id: index + 1,
       title: `GitHub ${index + 1}`,
+      favicon_url: `/api/v1/bookmarks/${index + 1}/favicon`,
+      thumbnail_url: null,
       url: `https://github.com/example/${index + 1}`,
     }));
     const youtubeBookmarks = Array.from({ length: 5 }, (_, index) => ({
@@ -347,6 +349,9 @@ describe("App", () => {
 
     expect(sources.text()).toContain("GitHub6");
     expect(sources.text()).not.toContain("YouTube");
+    expect(sources.get('.source-name img').attributes("src")).toBe(
+      "/api/v1/bookmarks/1/favicon",
+    );
     await wrapper.get('[data-source="github.com"]').trigger("click");
     expect(wrapper.findAll(".bookmark-card")).toHaveLength(6);
     expect(wrapper.text()).toContain("GitHub 1");
@@ -467,6 +472,42 @@ describe("App", () => {
     expect(wrapper.text()).toContain("Reader");
     await listButton.trigger("click");
     expect(wrapper.get(".bookmark-list").classes()).toContain("list-view");
+  });
+
+  /** Given cached presentation assets, cards use concise links, icons, and gallery thumbnails. */
+  it("presents bookmark metadata from same-origin assets", async () => {
+    vi.mocked(api.listBookmarks).mockResolvedValue({
+      items: [
+        {
+          ...bookmark,
+          favicon_url: "/api/v1/bookmarks/2/favicon",
+          id: 2,
+          thumbnail_url: "/api/v1/bookmarks/2/thumbnail",
+          title: "Long guide",
+          url: "https://docs.example.com/reference/a-long-path/?token=secret#section",
+        },
+      ],
+      limit: 1000,
+      offset: 0,
+      total: 1,
+    });
+    const wrapper = mount(App);
+    await flushPromises();
+    const link = wrapper.get(".bookmark-copy a");
+
+    expect(link.text()).toBe("docs.example.com/reference/a-long-path");
+    expect(link.attributes("href")).toContain("?token=secret#section");
+    expect(link.attributes("aria-label")).toContain("?token=secret#section");
+    expect(wrapper.get(".bookmark-icon").attributes("src")).toBe(
+      "/api/v1/bookmarks/2/favicon",
+    );
+    expect(wrapper.find(".bookmark-thumbnail").exists()).toBe(false);
+
+    await wrapper.get('[aria-label="Show gallery view"]').trigger("click");
+    const thumbnail = wrapper.get(".bookmark-thumbnail img");
+    expect(thumbnail.attributes("src")).toBe("/api/v1/bookmarks/2/thumbnail");
+    await thumbnail.trigger("error");
+    expect(wrapper.find(".bookmark-thumbnail").exists()).toBe(false);
   });
 
   /** Given header actions, Add and Import use labeled purpose-specific vector icons. */

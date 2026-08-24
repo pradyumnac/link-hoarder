@@ -2,11 +2,11 @@
 
 ## Status
 
-proposed
+accepted
 
 ## Implemented
 
-n/a
+done
 
 ## Context
 

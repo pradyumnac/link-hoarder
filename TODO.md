@@ -6,14 +6,13 @@ Task conventions: `todo-md-lite` skill. Shipped work is in `CHANGELOG.md`.
 
 | ID | Type | Status | Task | Depends | ADR | Triage |
 | --- | --- | --- | --- | --- | --- | --- |
-| core-bookmark-presentation | design | blocked | Decide and implement icons, concise links, and thumbnail previews | | 0005 | n |
 
 ## Future
 
 | ID | Type | Status | Task | Depends | ADR | Triage |
 | --- | --- | --- | --- | --- | --- | --- |
-| core-actions-overflow | feature | pending | Move secondary bookmark actions into an overflow menu | core-bookmark-presentation | | n |
-| core-filter-chips | feature | pending | Add removable active-filter chips | core-actions-overflow | | n |
+| core-actions-overflow | feature | pending | Move secondary bookmark actions into an overflow menu | | | n |
+| core-filter-chips | feature | pending | Add active-filter chips, filter reset, and contextual folders | core-actions-overflow | | n |
 | api-collection-query | feature | pending | Move collection filtering and pagination to the API | core-filter-chips | | n |
 | core-results-sorting | feature | pending | Add sorting and a consolidated results toolbar | api-collection-query | | n |
 | core-state-url | feature | pending | Persist collection state in the URL | core-results-sorting | | n |

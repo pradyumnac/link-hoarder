@@ -29,6 +29,8 @@ An explicit directory can override the saved value.
 | `LINK_HOARDER_API_KEY` | secret string | Saved value or none | Authenticate API clients and the API server. Use at least 32 characters. |
 | `LINK_HOARDER_API_TIMEOUT_SECONDS` | number | `10` | Set the CLI HTTP timeout. Use a value greater than 0 and at most 120. |
 | `LINK_HOARDER_DATABASE_PATH` | path | Platform user data directory | Select the local SQLite file. |
+| `LINK_HOARDER_METADATA_CACHE_PATH` | path | Platform user data directory | Select the sanitized bookmark image directory. |
+| `LINK_HOARDER_METADATA_REFRESH_ENABLED` | boolean | `true` | Enable background bookmark metadata refreshes. |
 | `LINK_HOARDER_LOG_LEVEL` | string | `INFO` | Set the structured log level. |
 | `LINK_HOARDER_HOST` | string | `127.0.0.1` | Set the API bind host. |
 | `LINK_HOARDER_PORT` | integer | `8000` | Set the direct API bind port. |
@@ -37,6 +39,7 @@ API mode requires an API URL and API key.
 The direct API process also requires `LINK_HOARDER_API_KEY`.
 The Docker stack generates and stores a key when the variable is not set.
 In Docker Compose, `LINK_HOARDER_PORT` selects the frontend host port.
+The Docker stack stores the metadata cache in its persistent data volume.
 
 ## Browser settings
 

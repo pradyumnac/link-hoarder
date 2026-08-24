@@ -22,6 +22,7 @@
 
 ### Changed
 
+- Add secure cached bookmark icons, concise links, and gallery thumbnails (core-bookmark-presentation, ADR-0005).
 - Scale collection navigation, gallery columns, and workspace width across desktop and 4K screens (core-wide-layout).
 - Restructure collection navigation with smart destinations, source filters, and a responsive drawer (core-navigation-restructure).
 - Make CLI output readable, debuggable, repeatable, and explicit about error states (cli-output-resilience).

@@ -45,6 +45,9 @@
 - Route a new browser session to the stable UI through the A/B proxy.
 - Select the staging UI from the top bar and keep that selection for the browser session.
 - Switch from Staging to Stable and load the Stable JavaScript and CSS assets.
+- Fetch and sanitize bookmark icons and gallery thumbnails through the API.
+- Show a concise bookmark URL with the complete URL as its link target and accessible name.
+- Serve cached bookmark images from same-origin API routes.
 
 ## Alternate flows
 
@@ -83,6 +86,8 @@
 - Select the stable UI after the browser session uses the staging UI.
 - Select a UI with the `version` query parameter.
 - Set the variant cookie before the clean URL loads the selected UI assets.
+- Show a generated domain icon when a bookmark has no cached favicon.
+- Keep list rows compact when a gallery thumbnail is available.
 
 ## Edge flows
 
@@ -123,6 +128,9 @@
 - Start the A/B stack when no stable image exists.
 - Rebuild only the staging image from the active redesign branch.
 - Use the stable UI when the version cookie is absent.
+- Retry failed metadata fetches only after the failure cache expires.
+- Refresh stale metadata without delaying bookmark list responses.
+- Hide a missing gallery thumbnail without an empty visual region.
 
 ## Negative flows
 
@@ -162,3 +170,7 @@
 - Show an empty dropdown state when no folder matches the typed query.
 - Ignore an invalid version query value or session cookie and use the stable UI.
 - Keep the stable frontend available when a staging deployment fails.
+- Reject metadata URLs with credentials, restricted ports, or non-public destinations.
+- Reject redirects to blocked destinations and stop after the redirect limit.
+- Reject oversized responses, oversized decoded images, and unsupported image formats.
+- Keep bookmark create and import operations successful when metadata fetching fails.

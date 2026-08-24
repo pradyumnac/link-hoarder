@@ -20,16 +20,22 @@ from fastapi import (
     status,
 )
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
 
 from link_hoarder.core.config import Settings
 from link_hoarder.core.importers import import_html_export
 from link_hoarder.core.logging import configure_logging
+from link_hoarder.core.metadata import (
+    BookmarkMetadataService,
+    MetadataFetcher,
+    generated_domain_icon,
+)
 from link_hoarder.core.models import (
     BookmarkCreate,
-    BookmarkPage,
+    BookmarkPresentationPage,
+    BookmarkPresentationRead,
     BookmarkRead,
     BookmarkUpdate,
     HtmlImportResult,
@@ -53,7 +59,10 @@ class ErrorDetail(BaseModel):
     detail: str
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None,
+    metadata_fetcher: MetadataFetcher | None = None,
+) -> FastAPI:
     """Create an API application with initialized storage."""
     current = settings or Settings()
     configure_logging(current.log_level)
@@ -61,6 +70,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         raise RuntimeError("LINK_HOARDER_API_KEY is required.")
     repository = BookmarkRepository(current.database_url)
     repository.initialize()
+    metadata = BookmarkMetadataService(
+        repository,
+        current.metadata_cache_path,
+        fetcher=metadata_fetcher,
+        enabled=current.metadata_refresh_enabled,
+    )
     expected_key = current.api_key.get_secret_value()
 
     def require_api_key(provided: Annotated[str | None, Security(_API_KEY)]) -> None:
@@ -77,6 +92,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         try:
             yield
         finally:
+            metadata.close()
             repository.close()
 
     authorized = [Depends(require_api_key)]
@@ -129,18 +145,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     def create_bookmark(bookmark: BookmarkCreate) -> BookmarkRead:
         try:
-            return repository.create(bookmark)
+            created = repository.create(bookmark)
         except DuplicateBookmarkError as error:
             raise _duplicate() from error
+        metadata.queue_refresh(created)
+        return created
 
     @router.get("/bookmarks", tags=["bookmarks"])
     def list_bookmarks(
         query: Annotated[str | None, Query()] = None,
         limit: Annotated[int, Query(ge=1, le=1000)] = 100,
         offset: Annotated[int, Query(ge=0)] = 0,
-    ) -> BookmarkPage:
-        return BookmarkPage(
-            items=repository.list(query=query, limit=limit, offset=offset),
+    ) -> BookmarkPresentationPage:
+        bookmarks = repository.list(query=query, limit=limit, offset=offset)
+        for bookmark in bookmarks:
+            metadata.queue_refresh(bookmark)
+        return BookmarkPresentationPage(
+            items=[_present_bookmark(bookmark, metadata) for bookmark in bookmarks],
             total=repository.count(query=query),
             limit=limit,
             offset=offset,
@@ -163,6 +184,34 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise _not_found(bookmark_id)
         return bookmark
 
+    @router.get("/bookmarks/{bookmark_id}/favicon", tags=["bookmarks"])
+    def get_bookmark_favicon(bookmark_id: int) -> Response:
+        bookmark = repository.get(bookmark_id)
+        if bookmark is None:
+            raise _not_found(bookmark_id)
+        metadata.queue_refresh(bookmark)
+        path = metadata.asset_path(bookmark_id, "favicon")
+        if path is not None:
+            return FileResponse(path, media_type="image/png")
+        return Response(
+            content=generated_domain_icon(bookmark.url),
+            media_type="image/svg+xml",
+        )
+
+    @router.get("/bookmarks/{bookmark_id}/thumbnail", tags=["bookmarks"])
+    def get_bookmark_thumbnail(bookmark_id: int) -> Response:
+        bookmark = repository.get(bookmark_id)
+        if bookmark is None:
+            raise _not_found(bookmark_id)
+        metadata.queue_refresh(bookmark)
+        path = metadata.asset_path(bookmark_id, "thumbnail")
+        if path is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="The bookmark has no cached thumbnail.",
+            )
+        return FileResponse(path, media_type="image/png")
+
     @router.patch(
         "/bookmarks/{bookmark_id}",
         responses={status.HTTP_409_CONFLICT: {"model": ErrorDetail}},
@@ -175,6 +224,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise _duplicate() from error
         if bookmark is None:
             raise _not_found(bookmark_id)
+        metadata.queue_refresh(bookmark)
         return bookmark
 
     @router.delete(
@@ -183,8 +233,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         tags=["bookmarks"],
     )
     def delete_bookmark(bookmark_id: int) -> Response:
-        if not repository.delete(bookmark_id):
+        if repository.get(bookmark_id) is None:
             raise _not_found(bookmark_id)
+        metadata.purge_assets(bookmark_id)
+        repository.delete(bookmark_id)
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     @router.post("/imports/bookmarks-file", tags=["imports"])
@@ -203,6 +255,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             profile = Path(temporary) / filename
             profile.write_bytes(content)
             result = import_html_export(repository, profile)
+            for bookmark in repository.list(limit=1000):
+                metadata.queue_refresh(bookmark)
             warnings = [
                 warning.model_copy(update={"profile": filename})
                 for warning in result.warnings
@@ -211,6 +265,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     api.include_router(router)
     return api
+
+
+def _present_bookmark(
+    bookmark: BookmarkRead, metadata: BookmarkMetadataService
+) -> BookmarkPresentationRead:
+    favicon_url = None
+    thumbnail_url = None
+    if not bookmark.url.lower().startswith("javascript:"):
+        favicon_url = f"{_API_PREFIX}/bookmarks/{bookmark.id}/favicon"
+        if metadata.asset_path(bookmark.id, "thumbnail") is not None:
+            thumbnail_url = f"{_API_PREFIX}/bookmarks/{bookmark.id}/thumbnail"
+    return BookmarkPresentationRead.model_validate(
+        {
+            **bookmark.model_dump(),
+            "favicon_url": favicon_url,
+            "thumbnail_url": thumbnail_url,
+        }
+    )
 
 
 def _not_found(bookmark_id: int) -> HTTPException:

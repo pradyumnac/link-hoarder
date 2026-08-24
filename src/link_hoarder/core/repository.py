@@ -14,6 +14,7 @@ from sqlmodel import Session, SQLModel, col, create_engine, select
 from link_hoarder.core.backend import BookmarkStorageError, DuplicateBookmarkError
 from link_hoarder.core.models import (
     BookmarkCreate,
+    BookmarkMetadataRecord,
     BookmarkRead,
     BookmarkRecord,
     BookmarkUpdate,
@@ -162,9 +163,39 @@ class BookmarkRepository:
             record = session.get(BookmarkRecord, bookmark_id)
             if record is None:
                 return False
+            metadata = session.get(BookmarkMetadataRecord, bookmark_id)
+            if metadata is not None:
+                session.delete(metadata)
             session.delete(record)
             session.commit()
             return True
+
+    def get_metadata(self, bookmark_id: int) -> BookmarkMetadataRecord | None:
+        """Get cached metadata for one bookmark."""
+        with self.session() as session:
+            record = session.get(BookmarkMetadataRecord, bookmark_id)
+            return (
+                BookmarkMetadataRecord.model_validate(record)
+                if record is not None
+                else None
+            )
+
+    def save_metadata(self, metadata: BookmarkMetadataRecord) -> None:
+        """Create or replace cached metadata for one bookmark."""
+        with self.session() as session:
+            record = session.get(BookmarkMetadataRecord, metadata.bookmark_id)
+            if record is None:
+                record = metadata
+            else:
+                record.sqlmodel_update(metadata.model_dump())
+            session.add(record)
+            try:
+                session.commit()
+            except SQLAlchemyError as error:
+                session.rollback()
+                raise BookmarkStorageError(
+                    "The bookmark metadata could not be stored."
+                ) from error
 
     @staticmethod
     def _read(record: BookmarkRecord) -> BookmarkRead:
