@@ -986,15 +986,21 @@ onBeforeUnmount(() => {
           <p v-else-if="visibleBookmarks.length === 0" class="empty">No bookmarks match this view.</p>
           <ul v-else class="bookmark-list" :class="`${viewMode}-view`">
             <li v-for="bookmark in visibleBookmarks" :key="bookmark.id" class="bookmark-card">
-              <div
-                v-if="viewMode === 'gallery' && bookmark.thumbnail_url && !failedThumbnailIds.has(bookmark.id)"
-                class="bookmark-thumbnail"
-              >
+              <div v-if="viewMode === 'gallery'" class="bookmark-thumbnail">
                 <img
+                  v-if="bookmark.thumbnail_url && !failedThumbnailIds.has(bookmark.id)"
                   :src="bookmark.thumbnail_url"
                   alt=""
                   loading="lazy"
                   @error="hideThumbnail(bookmark.id)"
+                />
+                <img
+                  v-else
+                  class="bookmark-thumbnail-fallback"
+                  src="/link-hoarder.svg"
+                  alt=""
+                  width="28"
+                  height="28"
                 />
               </div>
               <div class="bookmark-main">
@@ -1012,15 +1018,19 @@ onBeforeUnmount(() => {
                     <h3>{{ bookmark.title }}</h3>
                     <span v-if="bookmark.url.startsWith('javascript:')" class="bookmarklet">Bookmarklet</span>
                   </div>
-                  <a
-                    v-if="!bookmark.url.startsWith('javascript:')"
-                    :href="bookmark.url"
-                    :aria-label="bookmark.url"
-                    target="_blank"
-                    rel="noreferrer"
-                  >{{ conciseBookmarkUrl(bookmark.url) }}</a>
-                  <code v-else>{{ bookmark.url }}</code>
-                  <p v-if="bookmark.folder" class="folder">{{ bookmark.folder }}</p>
+                  <div class="meta-row">
+                    <a
+                      v-if="!bookmark.url.startsWith('javascript:')"
+                      class="bookmark-url"
+                      :href="bookmark.url"
+                      :title="bookmark.url"
+                      :aria-label="bookmark.url"
+                      target="_blank"
+                      rel="noreferrer"
+                    >{{ conciseBookmarkUrl(bookmark.url) }}</a>
+                    <code v-else class="bookmark-url" :title="bookmark.url">{{ bookmark.url }}</code>
+                    <span v-if="bookmark.folder" class="folder" :title="bookmark.folder">{{ bookmark.folder }}</span>
+                  </div>
                   <div v-if="bookmark.tags?.length" class="tags"><span v-for="tag in bookmark.tags" :key="tag">{{ tag }}</span></div>
                 </div>
               </div>
