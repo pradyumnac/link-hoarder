@@ -6,13 +6,9 @@ Task conventions: `todo-md-lite` skill. Shipped work is in `CHANGELOG.md`.
 
 | ID | Type | Status | Task | Depends | ADR | Triage |
 | --- | --- | --- | --- | --- | --- | --- |
-| core-metadata-promotion | fix | pending | Promote a backfilled bookmark when a visible request needs it | | 0005 | n |
-| core-metadata-failure.memory | fix | pending | Hold a retry backoff when a failure record cannot be stored | | 0005 | n |
-| core-metadata-backfill.sweep | feature | pending | Sweep missing bookmark metadata idempotently in the background | | 0005 | n |
 | core-metadata-svg.icons | feature | blocked | Convert SVG site icons to PNG before rejecting them | | 0005 | n |
-| api-availability-favicon | refactor | pending | Stop reading unused favicon availability for each collection row | | 0005 | n |
-| core-collection-presentation | fix | pending | Correct collection list and gallery layout, spacing, and truncation | | | n |
-| test-metadata-delivery | test | pending | Validate metadata delivery with malformed URLs and 1,500 bookmarks | core-metadata-promotion, core-metadata-failure.memory, core-metadata-backfill.sweep, api-availability-favicon | 0005 | n |
+| core-metadata-reason | feature | pending | Store why a metadata fetch was blocked or failed | infra-schema-migrations | 0005 | n |
+| test-metadata-delivery | test | pending | Validate metadata delivery with malformed URLs and 1,500 bookmarks | | 0005 | n |
 
 ## Future
 

@@ -4,6 +4,7 @@
 
 ### Added
 
+- Sweep missing bookmark metadata idempotently in the background (core-metadata-backfill.sweep, ADR-0005).
 - Make search the primary control in a compact, themeable application header (ui-header-compact).
 - Export bookmarks to browser-compatible HTML and structured JSON files (cli-bookmark-export).
 - Import native Brave and Zen browser profiles (import-brave.zen-native).
@@ -22,6 +23,7 @@
 
 ### Changed
 
+- Stop reading unused favicon availability for each collection row (api-availability-favicon, ADR-0005).
 - Bound the metadata refresh queue and reserve capacity for visible bookmarks (core-metadata-scheduling, ADR-0005).
 
 - Add secure cached bookmark icons, concise links, and gallery thumbnails (core-bookmark-presentation, ADR-0005).
@@ -37,6 +39,9 @@
 
 ### Fixed
 
+- Promote a backfilled bookmark when a visible request needs it (core-metadata-promotion, ADR-0005).
+- Hold a retry backoff when a failure record cannot be stored (core-metadata-failure.memory, ADR-0005).
+- Correct collection list and gallery layout, spacing, and truncation (core-collection-presentation).
 - Give bookmark asset routes a separate rate limit, cache headers, and ETags (api-asset-caching, ADR-0005).
 - Read bookmark presentation metadata for one page in one query (api-metadata-query-load, ADR-0005).
 - Queue metadata for exactly the bookmarks an import creates, at every library size (import-metadata-refresh, ADR-0005).

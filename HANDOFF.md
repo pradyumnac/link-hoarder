@@ -5,21 +5,42 @@ Store unresolved session findings in this file. Move each finding to its permane
 ## Execution state
 
 `main` contains the accepted compact-header, collection-navigation, and wide-layout redesigns.
-The active branch contains ADR 0005 implementation with every blocking metadata delivery fix applied.
-`test-metadata-delivery` is the one remaining row for ADR 0005.
+The active branch contains ADR 0005 with every blocking metadata delivery fix applied, the
+background metadata sweeper, and the collection layout correction. Nothing is pushed.
 
 The local ignored `stack/.env` sets `LINK_HOARDER_AB_ENABLED=true`.
-The A/B stack runs at `http://127.0.0.1:8080`.
-The root page and health endpoint return HTTP 200.
-Stable and Staging use the accepted UI.
-The A/B proxy sets the variant cookie and redirects before UI assets load.
-`mise run ab-check` passes for Stable and Staging.
+The A/B stack runs at `http://127.0.0.1:8080`. The root page and health endpoint return HTTP 200.
+`mise run ab-check` reports that Stable and Staging now DIFFER: Staging carries the new
+collection layout, Stable does not. Promote with `mise run ab-promote` after visual review.
+
+`link-hoarder-api:before` is the pre-session API image, kept for comparison. Restore it with
+`docker tag link-hoarder-api:before link-hoarder-api:local` and recreate the `api` service.
+
+The A/B split is frontend only. `stack/compose.ab.yaml` defines one shared `api` service, so a
+backend change cannot be staged as a variant and reaches both variants at once.
+
+## Metadata status is not link health
+
+`BookmarkMetadataRecord.status` holds `READY`, `FAILED`, or `BLOCKED`. This records the result of
+one metadata fetch. It is not a reachability signal, and it must not be presented as one.
+
+Live data shows why. `BLOCKED` currently covers `fahdmirza.com`, `notebooklm.google.com`,
+`gemini.google.com`, and `youtube.com` playlists, which are all reachable. They tripped this
+application's own page-size or redirect limits. Only `192.168.128.101:8006` is a true policy
+block. `FAILED` mixes a permanent DNS failure with a transient network error in the same value.
+
+The record also stores no reason, only the enum, so the two cases cannot be separated today.
+`core-metadata-reason` covers adding that reason and needs a schema migration.
+
+The status is not exposed in any API response and is not a bookmark tag. Real reachability
+tracking belongs to `core-health-policy` and `core-link-health`, and surfacing the fetch outcome
+belongs to `core-metadata-diagnostics`.
 
 ## Next parallel run plan
 
-Plan only. Nothing here is launched yet. The current run owns
-`core/metadata.py`, `core/repository.py`, `api/app.py`, and
-`frontend/src/App.vue`, so every wave below starts after that run merges.
+Plan only. Nothing here is launched yet. The run that owned
+`core/metadata.py`, `core/repository.py`, and `frontend/src/App.vue` has
+merged, so wave 1 is ready to launch.
 
 Agent count is set by file ownership, not by task count. Two agents must
 never own one file. `frontend/src/App.vue` is a single 1040-line file, so
@@ -81,14 +102,10 @@ Windows, which conflicts with the Windows and Linux support rule.
 ## Task rail
 
 Mirrors the `Todo` section of `TODO.md`. The session task rail tool was not
-available when this was written, so this table is the only record.
+available, so this table is the only record.
 
 | ID | Status | Task | Blocked by |
 | --- | --- | --- | --- |
-| core-metadata-promotion | pending | `_pending` does not record the queue kind, so a visible request for a bookmark already queued for backfill returns early instead of promoting it. See `_submit` in `src/link_hoarder/core/metadata.py`. | |
-| core-metadata-failure.memory | pending | When the metadata write and the failure-record write both fail, no backoff state remains and each collection request refetches the remote URL. See `_refresh_with_generation` and `_record_failure`. | |
-| core-metadata-backfill.sweep | pending | Backfill runs only on import. 846 of 1501 bookmarks have no metadata row and nothing sweeps them. Needs an idempotent bulk sweep that triggers when data is missing. | |
 | core-metadata-svg.icons | blocked | Rasterize SVG site icons to PNG before rejecting them. ADR 0005 decided not to accept remote SVG, so the decision must change first. A rasterizer is also a new dependency, and `cairosvg` needs native cairo on Windows. | ADR 0005 amendment, dependency review |
-| api-availability-favicon | pending | `BookmarkAssetAvailability.has_favicon` costs two disk stats for each bookmark on each page, and `_present_bookmark` never reads it. | |
-| core-collection-presentation | pending | Collection list and gallery layout: unused horizontal space, ragged gallery card heights, URLs that break mid-word, and weak row hierarchy. | |
-| test-metadata-delivery | pending | Validate metadata delivery with malformed URLs and 1,500 bookmarks. | core-metadata-promotion, core-metadata-failure.memory, core-metadata-backfill.sweep, api-availability-favicon |
+| core-metadata-reason | pending | Store why a metadata fetch was blocked or failed. Today only the status enum is kept, so a policy block cannot be told apart from a tripped size or redirect limit. | infra-schema-migrations |
+| test-metadata-delivery | pending | Validate metadata delivery with malformed URLs and 1,500 bookmarks. | |
