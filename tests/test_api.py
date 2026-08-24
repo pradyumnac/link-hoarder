@@ -491,6 +491,8 @@ def test_api_cached_favicon_and_thumbnail_are_privately_cacheable_with_etags(
 #     still queues only the newly created bookmarks, not the pre-existing
 #     ones repository.list(limit=1000) would have returned.
 #   negative: importing only duplicate bookmarks queues nothing.
+#   An import is bulk backlog work, so it queues through `queue_backfill`
+#   and cannot consume the capacity reserved for visible bookmarks.
 
 
 def test_api_import_queues_metadata_for_created_bookmarks_in_an_empty_library(
@@ -498,16 +500,14 @@ def test_api_import_queues_metadata_for_created_bookmarks_in_an_empty_library(
 ) -> None:
     """Given an empty library, import queues metadata for exactly the new bookmarks."""
     queued: list[int] = []
-    original = BookmarkMetadataService.queue_refresh_many
+    original = BookmarkMetadataService.queue_backfill
 
-    def record_queue_refresh_many(
-        self: BookmarkMetadataService, bookmarks: object
-    ) -> None:
+    def record_queue_backfill(self: BookmarkMetadataService, bookmarks: object) -> None:
         queued.extend(bookmark.id for bookmark in bookmarks)  # type: ignore[attr-defined]
         original(self, bookmarks)  # type: ignore[arg-type]
 
     monkeypatch.setattr(
-        BookmarkMetadataService, "queue_refresh_many", record_queue_refresh_many
+        BookmarkMetadataService, "queue_backfill", record_queue_backfill
     )
     client = _client(tmp_path)
     export = b"""<!DOCTYPE NETSCAPE-Bookmark-file-1>
@@ -550,16 +550,14 @@ def test_api_import_queues_only_new_bookmarks_beyond_the_list_window(
         seed.close()
 
     queued: list[int] = []
-    original = BookmarkMetadataService.queue_refresh_many
+    original = BookmarkMetadataService.queue_backfill
 
-    def record_queue_refresh_many(
-        self: BookmarkMetadataService, bookmarks: object
-    ) -> None:
+    def record_queue_backfill(self: BookmarkMetadataService, bookmarks: object) -> None:
         queued.extend(bookmark.id for bookmark in bookmarks)  # type: ignore[attr-defined]
         original(self, bookmarks)  # type: ignore[arg-type]
 
     monkeypatch.setattr(
-        BookmarkMetadataService, "queue_refresh_many", record_queue_refresh_many
+        BookmarkMetadataService, "queue_backfill", record_queue_backfill
     )
     settings = Settings(
         database_path=database_path,
@@ -601,16 +599,14 @@ def test_api_import_of_only_duplicates_queues_no_metadata(
     )
 
     queued: list[int] = []
-    original = BookmarkMetadataService.queue_refresh_many
+    original = BookmarkMetadataService.queue_backfill
 
-    def record_queue_refresh_many(
-        self: BookmarkMetadataService, bookmarks: object
-    ) -> None:
+    def record_queue_backfill(self: BookmarkMetadataService, bookmarks: object) -> None:
         queued.extend(bookmark.id for bookmark in bookmarks)  # type: ignore[attr-defined]
         original(self, bookmarks)  # type: ignore[arg-type]
 
     monkeypatch.setattr(
-        BookmarkMetadataService, "queue_refresh_many", record_queue_refresh_many
+        BookmarkMetadataService, "queue_backfill", record_queue_backfill
     )
     export = b"""<!DOCTYPE NETSCAPE-Bookmark-file-1>
 <DL><p><DT><A HREF="https://example.com">Example</A></DL><p>

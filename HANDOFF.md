@@ -15,14 +15,6 @@ Stable and Staging use the accepted UI.
 The A/B proxy sets the variant cookie and redirects before UI assets load.
 `mise run ab-check` passes for Stable and Staging.
 
-## Metadata delivery review findings
-
-The unpushed metadata changes have three unresolved findings:
-
-- The import endpoint uses `queue_refresh_many` in `src/link_hoarder/api/app.py`. Large imports can use all visible-work capacity.
-- `_submit` in `src/link_hoarder/core/metadata.py` does not prioritize visible refreshes. Executor order can keep visible work behind backfill work.
-- `_refresh_with_generation` catches fetch errors only. Asset storage or metadata storage errors bypass failure caching and retry backoff.
-
 ## Task rail
 
 No active session tasks.

@@ -46,6 +46,7 @@ import structlog.testing
 from PIL import Image
 
 import link_hoarder.core.metadata as metadata_module
+from link_hoarder.core.backend import BookmarkStorageError
 from link_hoarder.core.metadata import (
     BookmarkMetadataService,
     FetchedMetadata,
@@ -708,9 +709,9 @@ def test_queue_backfill_reserves_headroom_for_visible_work(
     ]
 
     service.queue_backfill(bookmarks[:2])
-    # Both workers are now occupied and blocked on the fetch call, so the
-    # pending set is stable at the backfill cap before the next calls.
-    assert _wait_until(lambda: len(fetcher.requested_urls) >= 2)
+    # The backfill worker is now blocked on its fetch call, so the pending
+    # set is stable at the backfill cap before the next calls.
+    assert _wait_until(lambda: len(fetcher.requested_urls) >= 1)
     service.queue_backfill([bookmarks[2]])
     service.queue_refresh(bookmarks[3])
 
@@ -759,3 +760,84 @@ def test_direct_refresh_leaves_no_retirement_entry(tmp_path: Path) -> None:
     service.refresh(bookmark)
 
     assert service._active_generation == {}  # Assert no retained state.
+
+
+def test_storage_failure_is_cached_with_backoff(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Given a metadata write failure after a good fetch, the failure is cached."""
+    repository = _counting_repository(tmp_path)
+    bookmark = repository.create(
+        BookmarkCreate(url="https://example.com/", title="Example")
+    )
+    service = BookmarkMetadataService(
+        repository, tmp_path / "cache", fetcher=SuccessfulFetcher(_png()), enabled=False
+    )
+    original = repository.save_metadata
+    calls = {"n": 0}
+
+    def failing_save(record: BookmarkMetadataRecord) -> None:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise BookmarkStorageError("The bookmark metadata could not be stored.")
+        original(record)
+
+    monkeypatch.setattr(repository, "save_metadata", failing_save)
+    service.refresh(bookmark)
+
+    stored = repository.get_metadata(bookmark.id)
+    assert stored is not None
+    assert stored.status is MetadataStatus.FAILED
+    assert stored.retry_after > stored.refreshed_at
+
+
+def test_asset_write_failure_is_cached_with_backoff(tmp_path: Path) -> None:
+    """Given a cache file write failure, the failure is cached with a backoff."""
+    repository = _counting_repository(tmp_path)
+    bookmark = repository.create(
+        BookmarkCreate(url="https://example.com/", title="Example")
+    )
+    cache = tmp_path / "cache"
+    service = BookmarkMetadataService(
+        repository, cache, fetcher=SuccessfulFetcher(_png()), enabled=False
+    )
+    # Replace the cache directory with a file, so every asset write fails.
+    for existing in cache.iterdir():
+        existing.unlink()
+    cache.rmdir()
+    cache.write_text("not a directory", encoding="utf-8")
+
+    service.refresh(bookmark)
+
+    stored = repository.get_metadata(bookmark.id)
+    assert stored is not None
+    assert stored.status is MetadataStatus.FAILED
+
+
+def test_backfill_does_not_hold_workers_needed_by_visible_work(tmp_path: Path) -> None:
+    """Given a queued backfill, visible refresh work still runs without waiting."""
+    repository = _counting_repository(tmp_path)
+    backlog = [
+        repository.create(
+            BookmarkCreate(url=f"https://backlog{index}.example/", title=f"b{index}")
+        )
+        for index in range(6)
+    ]
+    visible = repository.create(
+        BookmarkCreate(url="https://visible.example/", title="visible")
+    )
+    fetcher = BlockingFetcher()
+    service = BookmarkMetadataService(
+        repository, tmp_path / "cache", fetcher=fetcher, enabled=True
+    )
+    try:
+        service.queue_backfill(backlog)
+        assert _wait_until(lambda: len(fetcher.requested_urls) >= 1)
+        service.queue_refresh(visible)
+
+        assert _wait_until(
+            lambda: "https://visible.example/" in fetcher.requested_urls
+        ), "Visible work waited behind backfill work."
+    finally:
+        fetcher.release.set()
+        service.close()

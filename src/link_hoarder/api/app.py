@@ -263,7 +263,9 @@ def create_app(
             profile = Path(temporary) / filename
             profile.write_bytes(content)
             detail = import_html_export_detailed(repository, profile)
-            metadata.queue_refresh_many(detail.created)
+            # An import is bulk backlog work. It must not consume the
+            # capacity reserved for bookmarks the user is looking at.
+            metadata.queue_backfill(detail.created)
             warnings = [
                 warning.model_copy(update={"profile": filename})
                 for warning in detail.result.warnings
