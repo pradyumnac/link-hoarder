@@ -7,7 +7,7 @@ import socket
 import ssl
 import threading
 import time
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from html.parser import HTMLParser
@@ -36,8 +36,17 @@ _MAX_IMAGE_PIXELS = 16_000_000
 _MAX_REDIRECTS = 3
 _REFRESH_AFTER = timedelta(days=7)
 _RETRY_AFTER_FAILURE = timedelta(hours=1)
+_MAX_RETRY_AFTER_FAILURE = timedelta(hours=24)
 _ALLOWED_IMAGE_FORMATS = frozenset({"GIF", "ICO", "JPEG", "PNG", "WEBP"})
 _REDIRECT_STATUSES = frozenset({301, 302, 303, 307, 308})
+
+# Hard cap on the total number of bookmarks with queued or in-flight
+# refresh work. Bulk backlog work (`queue_backfill`) may only fill a
+# fraction of this cap, so visible-bookmark work (`queue_refresh`,
+# `queue_refresh_many`) always has reserved headroom to run without being
+# crowded out by a large import or collection scan.
+_MAX_PENDING_REFRESHES = 200
+_MAX_BACKFILL_PENDING = 100
 
 _LOGGER = structlog.get_logger(__name__)
 
@@ -182,7 +191,7 @@ def _validated_destination(url: str) -> tuple[SplitResult, str, int]:
         port = parsed.port
     except ValueError as error:
         raise MetadataBlockedError("The remote URL has an invalid port.") from error
-    if parsed.scheme not in {"http", "https"} or parsed.hostname is None:
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
         raise MetadataBlockedError("Only HTTP and HTTPS metadata URLs are permitted.")
     if parsed.username is not None or parsed.password is not None:
         raise MetadataBlockedError("Credentials are not permitted in metadata URLs.")
@@ -194,7 +203,12 @@ def _validated_destination(url: str) -> tuple[SplitResult, str, int]:
             "Control characters are not permitted in metadata URLs."
         )
 
-    hostname = parsed.hostname.encode("idna").decode("ascii")
+    try:
+        hostname = parsed.hostname.encode("idna").decode("ascii")
+    except UnicodeError as error:
+        raise MetadataBlockedError(
+            "The metadata hostname could not be encoded."
+        ) from error
     try:
         answers = socket.getaddrinfo(hostname, selected_port, type=socket.SOCK_STREAM)
     except OSError as error:
@@ -228,14 +242,22 @@ def _request_once(
     accept: str,
 ) -> tuple[int, Mapping[str, str], bytes]:
     hostname = parsed.hostname
-    if hostname is None:
+    if not hostname:
         raise MetadataBlockedError("The metadata URL has no host.")
-    ascii_hostname = hostname.encode("idna").decode("ascii")
+    try:
+        ascii_hostname = hostname.encode("idna").decode("ascii")
+    except UnicodeError as error:
+        raise MetadataBlockedError(
+            "The metadata hostname could not be encoded."
+        ) from error
     host_header = f"[{ascii_hostname}]" if ":" in ascii_hostname else ascii_hostname
     default_port = 443 if parsed.scheme == "https" else 80
     if port != default_port:
         host_header = f"{host_header}:{port}"
-    target = urlunsplit(("", "", parsed.path or "/", parsed.query, ""))
+    try:
+        target = urlunsplit(("", "", parsed.path or "/", parsed.query, ""))
+    except ValueError as error:
+        raise MetadataBlockedError("The metadata request target is invalid.") from error
     if any(character in target for character in ("\r", "\n", "\x00")):
         raise MetadataBlockedError("The metadata request target is invalid.")
 
@@ -316,8 +338,46 @@ def _sanitize_image(content: bytes, *, maximum_size: tuple[int, int]) -> bytes:
         ) from error
 
 
+class BookmarkAssetAvailability(BaseModel):
+    """Cached presentation assets available for one bookmark."""
+
+    model_config = ConfigDict(frozen=True)
+
+    has_favicon: bool = False
+    has_thumbnail: bool = False
+
+
 class BookmarkMetadataService:
-    """Refresh bookmark metadata in the background and serve cached assets."""
+    """Refresh bookmark metadata in the background and serve cached assets.
+
+    Design notes:
+
+    Bounded, prioritized queue (`core-metadata-scheduling`): the total
+    number of bookmarks with queued or in-flight refresh work is capped at
+    `_MAX_PENDING_REFRESHES`. Work submitted past the cap is dropped, with a
+    structlog warning, instead of growing without limit. Visible-bookmark
+    work (`queue_refresh`, `queue_refresh_many`) may use the full cap.
+    Bulk backlog work (`queue_backfill`) may only use the smaller
+    `_MAX_BACKFILL_PENDING` cap, so it can never crowd out the headroom
+    reserved for visible work. This "reserved headroom" design was chosen
+    over a literal priority queue with cancellation because
+    `ThreadPoolExecutor` has no priority ordering or safe mid-flight
+    displacement, and reserved capacity gives the same practical outcome
+    (visible work is never starved by backlog) with far less complexity.
+
+    Retirement scoping (`core-metadata-retirement`): a deleted bookmark's
+    in-flight refresh must not write files or a metadata row after
+    `purge_assets` runs, but the id must be free to refresh normally if a
+    later bookmark reuses it (SQLite reuses rowids). This is implemented
+    with a generation counter per bookmark id (`_active_generation`),
+    present only while work for that id is queued or running.
+    `queue_refresh`/`queue_refresh_many`/`queue_backfill` capture the
+    current generation when they submit work; `purge_assets` bumps the
+    generation only if work is in flight; the worker checks the generation
+    right before writing and silently discards its result on a mismatch.
+    The entry is removed once the in-flight worker finishes, so nothing
+    about a deleted bookmark is retained once its refresh has settled.
+    """
 
     def __init__(
         self,
@@ -338,7 +398,7 @@ class BookmarkMetadataService:
             else None
         )
         self._pending: set[int] = set()
-        self._retired: set[int] = set()
+        self._active_generation: dict[int, int] = {}
         self._lock = threading.Lock()
 
     def close(self) -> None:
@@ -347,88 +407,102 @@ class BookmarkMetadataService:
             self._executor.shutdown(wait=True, cancel_futures=True)
 
     def queue_refresh(self, bookmark: BookmarkRead) -> None:
-        """Queue a refresh when cached metadata is absent, stale, or failed."""
-        if not self._enabled or bookmark.url.lower().startswith("javascript:"):
-            return
-        cached = self._repository.get_metadata(bookmark.id)
-        if not self._needs_refresh(bookmark, cached):
-            return
-        with self._lock:
-            if bookmark.id in self._pending or bookmark.id in self._retired:
-                return
-            self._pending.add(bookmark.id)
-        if self._executor is not None:
-            self._executor.submit(self._refresh_and_release, bookmark)
+        """Queue a refresh for one visible bookmark.
+
+        Visible-bookmark work is prioritized over bulk backlog work; see
+        the class docstring.
+        """
+        self.queue_refresh_many([bookmark])
+
+    def queue_refresh_many(self, bookmarks: Sequence[BookmarkRead]) -> None:
+        """Queue refresh for many visible bookmarks with one metadata read."""
+        self._queue(bookmarks, cap=_MAX_PENDING_REFRESHES)
+
+    def queue_backfill(self, bookmarks: Sequence[BookmarkRead]) -> None:
+        """Queue bulk backlog refresh work that only fills spare capacity."""
+        self._queue(bookmarks, cap=_MAX_BACKFILL_PENDING)
+
+    def asset_availability(
+        self, bookmarks: Sequence[BookmarkRead]
+    ) -> dict[int, BookmarkAssetAvailability]:
+        """Return cached asset availability for many bookmarks with one metadata read."""
+        if not bookmarks:
+            return {}
+        cached_map = self._repository.list_metadata(
+            [bookmark.id for bookmark in bookmarks]
+        )
+        availability: dict[int, BookmarkAssetAvailability] = {}
+        for bookmark in bookmarks:
+            cached = cached_map.get(bookmark.id)
+            availability[bookmark.id] = BookmarkAssetAvailability(
+                has_favicon=self._verified_asset_path(
+                    cached.favicon_file if cached is not None else None
+                )
+                is not None,
+                has_thumbnail=self._verified_asset_path(
+                    cached.thumbnail_file if cached is not None else None
+                )
+                is not None,
+            )
+        return availability
 
     def refresh(self, bookmark: BookmarkRead) -> None:
-        """Fetch and store sanitized metadata for one bookmark."""
+        """Fetch and store sanitized metadata for one bookmark.
+
+        Any failure, including one this module did not anticipate, is
+        normalized into a `FAILED` cache row with a backoff so a bookmark
+        can never be retried in a hot loop.
+        """
+        with self._lock:
+            generation = self._active_generation.get(bookmark.id, 0)
+        self._refresh_with_generation(bookmark, generation)
+
+    def _refresh_with_generation(self, bookmark: BookmarkRead, generation: int) -> None:
         now = datetime.now(UTC)
         cached = self._repository.get_metadata(bookmark.id)
         try:
             fetched = self._fetcher.fetch(bookmark.url)
-            with self._lock:
-                if bookmark.id in self._retired:
-                    return
-                favicon_file = self._store_asset(
-                    bookmark.id, "favicon", fetched.favicon
-                )
-                thumbnail_file = self._store_asset(
-                    bookmark.id, "thumbnail", fetched.thumbnail
-                )
-                self._repository.save_metadata(
-                    BookmarkMetadataRecord(
-                        bookmark_id=bookmark.id,
-                        source_url=bookmark.url,
-                        status=MetadataStatus.READY,
-                        favicon_file=favicon_file,
-                        thumbnail_file=thumbnail_file,
-                        refreshed_at=now,
-                        retry_after=now + _REFRESH_AFTER,
-                    )
-                )
         except (MetadataBlockedError, MetadataFetchError) as error:
-            status = (
-                MetadataStatus.BLOCKED
-                if isinstance(error, MetadataBlockedError)
-                else MetadataStatus.FAILED
-            )
-            same_source = cached is not None and cached.source_url == bookmark.url
-            with self._lock:
-                if bookmark.id in self._retired:
-                    return
-                if not same_source:
-                    self._store_asset(bookmark.id, "favicon", None)
-                    self._store_asset(bookmark.id, "thumbnail", None)
-                self._repository.save_metadata(
-                    BookmarkMetadataRecord(
-                        bookmark_id=bookmark.id,
-                        source_url=bookmark.url,
-                        status=status,
-                        favicon_file=(
-                            cached.favicon_file
-                            if cached is not None and same_source
-                            else None
-                        ),
-                        thumbnail_file=(
-                            cached.thumbnail_file
-                            if cached is not None and same_source
-                            else None
-                        ),
-                        refreshed_at=now,
-                        retry_after=now + _RETRY_AFTER_FAILURE,
-                    )
-                )
-            _LOGGER.warning(
-                "bookmark_metadata_fetch_failed",
+            self._record_failure(bookmark, cached, error, now, generation)
+            return
+        except Exception as error:  # noqa: BLE001 - fail safe: never retry in a hot loop
+            _LOGGER.error(
+                "bookmark_metadata_fetch_unexpected_error",
                 bookmark_id=bookmark.id,
                 reason=error.__class__.__name__,
-                status=status.value,
+            )
+            self._record_failure(
+                bookmark,
+                cached,
+                MetadataFetchError("An unexpected metadata failure occurred."),
+                now,
+                generation,
+            )
+            return
+        with self._lock:
+            if self._active_generation.get(bookmark.id, 0) != generation:
+                return
+            favicon_file = self._store_asset(bookmark.id, "favicon", fetched.favicon)
+            thumbnail_file = self._store_asset(
+                bookmark.id, "thumbnail", fetched.thumbnail
+            )
+            self._repository.save_metadata(
+                BookmarkMetadataRecord(
+                    bookmark_id=bookmark.id,
+                    source_url=bookmark.url,
+                    status=MetadataStatus.READY,
+                    favicon_file=favicon_file,
+                    thumbnail_file=thumbnail_file,
+                    refreshed_at=now,
+                    retry_after=now + _REFRESH_AFTER,
+                )
             )
 
     def purge_assets(self, bookmark_id: int) -> None:
-        """Remove cached files and prevent pending work for a deleted bookmark."""
+        """Remove cached files and cancel in-flight work for a deleted bookmark."""
         with self._lock:
-            self._retired.add(bookmark_id)
+            if bookmark_id in self._active_generation:
+                self._active_generation[bookmark_id] += 1
             for kind in ("favicon", "thumbnail"):
                 (self._cache_path / f"{bookmark_id}-{kind}.png").unlink(missing_ok=True)
 
@@ -440,12 +514,99 @@ class BookmarkMetadataService:
         filename = (
             metadata.favicon_file if kind == "favicon" else metadata.thumbnail_file
         )
+        return self._verified_asset_path(filename)
+
+    def _verified_asset_path(self, filename: str | None) -> Path | None:
         if filename is None:
             return None
         path = (self._cache_path / filename).resolve()
         if path.parent != self._cache_path or not path.is_file():
             return None
         return path
+
+    def _queue(self, bookmarks: Sequence[BookmarkRead], *, cap: int) -> None:
+        if not self._enabled:
+            return
+        eligible = [
+            bookmark
+            for bookmark in bookmarks
+            if not bookmark.url.lower().startswith("javascript:")
+        ]
+        if not eligible:
+            return
+        cached_map = self._repository.list_metadata(
+            [bookmark.id for bookmark in eligible]
+        )
+        for bookmark in eligible:
+            if not self._needs_refresh(bookmark, cached_map.get(bookmark.id)):
+                continue
+            self._submit(bookmark, cap=cap)
+
+    def _submit(self, bookmark: BookmarkRead, *, cap: int) -> None:
+        with self._lock:
+            if bookmark.id in self._pending:
+                return
+            if len(self._pending) >= cap:
+                _LOGGER.warning(
+                    "bookmark_metadata_queue_full",
+                    bookmark_id=bookmark.id,
+                    pending=len(self._pending),
+                    cap=cap,
+                )
+                return
+            self._pending.add(bookmark.id)
+            generation = self._active_generation.get(bookmark.id, 0)
+            self._active_generation[bookmark.id] = generation
+        if self._executor is not None:
+            self._executor.submit(self._refresh_and_release, bookmark, generation)
+
+    def _record_failure(
+        self,
+        bookmark: BookmarkRead,
+        cached: BookmarkMetadataRecord | None,
+        error: MetadataFetchError,
+        now: datetime,
+        generation: int,
+    ) -> None:
+        status = (
+            MetadataStatus.BLOCKED
+            if isinstance(error, MetadataBlockedError)
+            else MetadataStatus.FAILED
+        )
+        same_source = cached is not None and cached.source_url == bookmark.url
+        interval = _next_retry_after_failure(cached, bookmark)
+        with self._lock:
+            if self._active_generation.get(bookmark.id, 0) != generation:
+                return
+            if not same_source:
+                self._store_asset(bookmark.id, "favicon", None)
+                self._store_asset(bookmark.id, "thumbnail", None)
+            self._repository.save_metadata(
+                BookmarkMetadataRecord(
+                    bookmark_id=bookmark.id,
+                    source_url=bookmark.url,
+                    status=status,
+                    favicon_file=(
+                        cached.favicon_file
+                        if cached is not None and same_source
+                        else None
+                    ),
+                    thumbnail_file=(
+                        cached.thumbnail_file
+                        if cached is not None and same_source
+                        else None
+                    ),
+                    refreshed_at=now,
+                    retry_after=now + interval,
+                )
+            )
+        _LOGGER.warning(
+            "bookmark_metadata_fetch_failed",
+            bookmark_id=bookmark.id,
+            reason=error.__class__.__name__,
+            status=status.value,
+            retry_after_seconds=interval.total_seconds(),
+        )
 
     @staticmethod
     def _needs_refresh(
@@ -457,12 +618,13 @@ class BookmarkMetadataService:
             or _as_utc(cached.retry_after) <= datetime.now(UTC)
         )
 
-    def _refresh_and_release(self, bookmark: BookmarkRead) -> None:
+    def _refresh_and_release(self, bookmark: BookmarkRead, generation: int) -> None:
         try:
-            self.refresh(bookmark)
+            self._refresh_with_generation(bookmark, generation)
         finally:
             with self._lock:
                 self._pending.discard(bookmark.id)
+                self._active_generation.pop(bookmark.id, None)
 
     def _store_asset(
         self, bookmark_id: int, kind: str, content: bytes | None
@@ -476,6 +638,27 @@ class BookmarkMetadataService:
         temporary.write_bytes(content)
         temporary.replace(path)
         return filename
+
+
+def _next_retry_after_failure(
+    cached: BookmarkMetadataRecord | None, bookmark: BookmarkRead
+) -> timedelta:
+    """Return a progressively longer backoff for repeated failures.
+
+    The backoff doubles from `_RETRY_AFTER_FAILURE` up to
+    `_MAX_RETRY_AFTER_FAILURE`, derived from the previous cached interval
+    (`retry_after` minus `refreshed_at`) because this schema has no
+    dedicated failure-count column.
+    """
+    if (
+        cached is not None
+        and cached.source_url == bookmark.url
+        and cached.status is not MetadataStatus.READY
+    ):
+        previous_interval = _as_utc(cached.retry_after) - _as_utc(cached.refreshed_at)
+        if previous_interval > timedelta(0):
+            return min(previous_interval * 2, _MAX_RETRY_AFTER_FAILURE)
+    return _RETRY_AFTER_FAILURE
 
 
 def _as_utc(value: datetime) -> datetime:
