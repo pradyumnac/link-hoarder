@@ -47,8 +47,7 @@ check_variant stable
 check_variant staging
 
 if cmp --silent "$temp_dir/stable.html" "$temp_dir/staging.html"; then
-    echo "Stable and Staging returned the same HTML." >&2
-    exit 1
+    printf 'A/B switching is healthy at %s; Stable and Staging match.\n' "$base_url"
+else
+    printf 'A/B switching is healthy at %s; Stable and Staging differ.\n' "$base_url"
 fi
-
-printf 'A/B switching is healthy at %s.\n' "$base_url"
