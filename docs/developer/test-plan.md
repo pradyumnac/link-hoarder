@@ -21,6 +21,13 @@
 - Open the browser import modal when the user selects the Import icon.
 - Change the bookmark collection from list view to gallery view.
 - Filter browser bookmarks by tag, bookmark type, and folder.
+- Select All, Recent, or Needs organization from the Library navigation.
+- Show detected website sources that contain more than five bookmarks.
+- Expand Sources and Filters by default.
+- Collapse Folders by default and expand it on demand.
+- Browse bookmarks with collapsible Folders and Tags groups.
+- Open the collection navigation drawer on a narrow screen.
+- Show Import and Settings icon buttons below the drawer close control.
 - Navigate from the root folder to a nested folder in the browser interface.
 - Save the page size and default collection view in browser-local storage.
 - Open a modal dialog to create a bookmark.
@@ -57,6 +64,11 @@
 - Close the browser import modal without starting an import.
 - Change the bookmark collection from gallery view to list view.
 - Clear each browser bookmark filter to show all search results.
+- Change the Library destination while folder and tag filters remain active.
+- Combine a source with active folder, tag, and type filters.
+- Collapse Sources and reopen it without changing the collection.
+- Collapse each Browse group and reopen it without changing the collection.
+- Close the narrow-screen navigation drawer with its close control.
 - Use folder breadcrumbs to return to a parent folder or all folders.
 - Restore saved browser settings when the user reloads the page.
 - Restore the saved accent color when the user reloads the page.
@@ -91,7 +103,11 @@
 - Hide the browser import modal on initial load.
 - Keep all bookmark actions available in list and gallery views.
 - Keep the transparent outline trash icon in list and gallery views.
-- Combine tag, bookmark type, and folder filters.
+- Combine tag, Library destination, and folder filters.
+- Keep one Library destination selected when browse controls filter the results.
+- Group unknown website domains under their host names.
+- Hide a source that contains five or fewer bookmarks.
+- Keep the Library selection when the narrow-screen navigation drawer closes.
 - Include direct and nested bookmarks when the user selects a parent folder.
 - Use default browser settings when browser-local storage has no saved settings.
 - Use green when browser-local storage has no saved accent color.
@@ -123,9 +139,15 @@
 - Show a notification event when a browser search request fails.
 - Do not move focus when the user presses `/` in an editable control.
 - Keep every compact-header icon accessible by name and keyboard focus.
+- Match the mobile menu, Import, and Settings buttons to the desktop header icon style.
+- Keep a redundant Collection navigation title out of the mobile drawer.
 - Keep the browser import modal open when an import attempt has no selected file.
 - Keep one collection view selected when the user selects the active view again.
-- Disable filter choices when the loaded collection has no applicable values.
+- Keep one Library destination selected when the user selects the active destination again.
+- Keep the narrow-screen navigation closed until the user opens it.
+- Close folder results when focus leaves the folder control.
+- Close the narrow-screen navigation when the user selects the backdrop.
+- Disable folder and tag controls when the loaded collection has no applicable values.
 - Hide child folder links when the selected folder has no child folders.
 - Reject malformed browser settings and report browser-local storage write failures.
 - Reject a malformed saved accent color and use green.

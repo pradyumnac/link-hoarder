@@ -28,13 +28,25 @@ See [A/B Switching](../how-to/ab-switching.md) for the redesign workflow.
 
 ## Collection navigation
 
-The left pane provides these controls:
+The Library section provides these destinations:
 
-- List and gallery views.
-- Tag filtering.
-- Bookmark and bookmarklet type filtering.
-- A searchable folder dropdown.
-- Child folder navigation.
+- All.
+- Recent items from the last 30 days.
+- Items that need a folder or tag.
+
+The collapsible Sources section starts expanded.
+It shows website domains that contain more than five bookmarks.
+Each source shows its item count.
+Known domains use names such as GitHub, YouTube, and Reddit.
+The Browse section puts folder and tag controls in separate collapsible groups.
+The Folders and Tags groups start collapsed.
+The folder results close when focus leaves the folder control.
+The Filters section starts expanded and provides bookmark type filtering.
+The View section provides list and gallery views.
+
+On narrow screens, the header menu opens these controls in a navigation drawer.
+Add and Notifications remain in the header.
+Import and Settings move into a subtle icon row below the drawer close button.
 
 Breadcrumbs above the collection show the selected folder hierarchy.
 Selecting a parent folder includes bookmarks from its child folders.

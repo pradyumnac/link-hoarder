@@ -263,7 +263,7 @@ describe("App", () => {
           source: "manual",
           tags: ["docs"],
           title: "Guide",
-          url: "https://example.com/guide",
+          url: "https://github.com/example/guide",
         },
         {
           ...bookmark,
@@ -282,6 +282,23 @@ describe("App", () => {
     const wrapper = mount(App);
     await flushPromises();
 
+    const library = wrapper.get('nav[aria-label="Library"]');
+    const browse = wrapper.get('[aria-label="Browse bookmarks"]');
+
+    expect(library.classes()).toContain("library-destinations");
+    expect(library.text()).toContain("All");
+    expect(library.text()).toContain("Recent");
+    expect(library.text()).toContain("Needs organization");
+    expect(library.text()).not.toContain("Bookmarklets");
+    expect(browse.text()).toContain("Folders");
+    expect(browse.text()).toContain("Tags");
+    expect(browse.findAll("details")).toHaveLength(2);
+    expect(browse.findAll("details")[0]?.attributes()).not.toHaveProperty("open");
+    expect(browse.findAll("details")[1]?.attributes()).not.toHaveProperty("open");
+    const sources = wrapper.get('[aria-label="Sources"]');
+    expect(sources.attributes()).toHaveProperty("open");
+    expect(sources.text()).toBe("SourcesAll sources");
+    expect(wrapper.get(".type-filter").attributes()).toHaveProperty("open");
     await wrapper.get('[aria-label="Filter by tag"]').setValue("docs");
     expect(wrapper.findAll(".bookmark-card")).toHaveLength(1);
     expect(wrapper.text()).toContain("Guide");
@@ -290,14 +307,110 @@ describe("App", () => {
     expect(wrapper.findAll(".bookmark-card")).toHaveLength(1);
     expect(wrapper.text()).toContain("Reader");
     await wrapper.get('[aria-label="Filter by bookmark type"]').setValue("all");
-    await wrapper.get('[aria-label="Filter by folder"]').setValue("reading");
+    const folderInput = wrapper.get('[aria-label="Filter by folder"]');
+    await folderInput.setValue("reading");
     expect(wrapper.get(".combobox-options").text()).toContain("Research/Reading");
     expect(wrapper.get(".combobox-options").text()).not.toContain("Tools");
+    await folderInput.trigger("focusout", { relatedTarget: null });
+    expect(wrapper.find(".combobox-options").exists()).toBe(false);
+    await folderInput.trigger("focus");
     await wrapper.get(".combobox-options button").trigger("click");
     expect(wrapper.findAll(".bookmark-card")).toHaveLength(1);
     expect(wrapper.text()).toContain("Guide");
     await wrapper.get('[aria-label="Filter by folder"]').setValue("");
     expect(wrapper.findAll(".bookmark-card")).toHaveLength(3);
+  });
+
+  /** Given domain counts, Sources shows only domains with more than five bookmarks. */
+  it("shows and selects frequent bookmark sources", async () => {
+    const githubBookmarks = Array.from({ length: 6 }, (_, index) => ({
+      ...bookmark,
+      id: index + 1,
+      title: `GitHub ${index + 1}`,
+      url: `https://github.com/example/${index + 1}`,
+    }));
+    const youtubeBookmarks = Array.from({ length: 5 }, (_, index) => ({
+      ...bookmark,
+      id: index + 7,
+      title: `YouTube ${index + 1}`,
+      url: `https://youtube.com/watch?v=${index + 1}`,
+    }));
+    vi.mocked(api.listBookmarks).mockResolvedValue({
+      items: [...githubBookmarks, ...youtubeBookmarks],
+      limit: 1000,
+      offset: 0,
+      total: 11,
+    });
+    const wrapper = mount(App);
+    await flushPromises();
+    const sources = wrapper.get('[aria-label="Sources"]');
+
+    expect(sources.text()).toContain("GitHub6");
+    expect(sources.text()).not.toContain("YouTube");
+    await wrapper.get('[data-source="github.com"]').trigger("click");
+    expect(wrapper.findAll(".bookmark-card")).toHaveLength(6);
+    expect(wrapper.text()).toContain("GitHub 1");
+    expect(wrapper.text()).not.toContain("YouTube 1");
+  });
+
+  /** Given smart Library destinations, Recent and Needs organization select useful subsets. */
+  it("selects smart Library destinations", async () => {
+    vi.mocked(api.listBookmarks).mockResolvedValue({
+      items: [
+        { ...bookmark, created_at: new Date().toISOString(), title: "Recent organized" },
+        {
+          ...bookmark,
+          created_at: "2000-01-01T00:00:00Z",
+          folder: null,
+          id: 2,
+          tags: [],
+          title: "Old unorganized",
+          url: "https://example.com/old",
+        },
+      ],
+      limit: 1000,
+      offset: 0,
+      total: 2,
+    });
+    const wrapper = mount(App);
+    await flushPromises();
+
+    await wrapper.get('[data-library-destination="needs-organization"]').trigger("click");
+    expect(wrapper.findAll(".bookmark-card")).toHaveLength(1);
+    expect(wrapper.text()).toContain("Old unorganized");
+    await wrapper.get('[data-library-destination="recent"]').trigger("click");
+    expect(wrapper.findAll(".bookmark-card")).toHaveLength(1);
+    expect(wrapper.text()).toContain("Recent organized");
+  });
+
+  /** Given narrow navigation, its controls open and the backdrop closes the drawer. */
+  it("opens and closes the collection navigation drawer", async () => {
+    const wrapper = mount(App);
+    await flushPromises();
+    const toggle = wrapper.get('[aria-label="Open collection navigation"]');
+    const navigation = wrapper.get('[aria-label="Collection navigation"]');
+
+    expect(toggle.element.closest(".app-header")).not.toBeNull();
+    expect(toggle.classes()).toContain("icon-button");
+    expect(toggle.classes()).toContain("secondary");
+    expect(toggle.get("svg path").attributes("d")).toContain("M4 6h16");
+    expect(navigation.find(".drawer-heading strong").exists()).toBe(false);
+    const drawerActions = navigation.get('[aria-label="Mobile actions"]');
+    const drawerImport = drawerActions.get('[aria-label="Import bookmarks"]');
+    const drawerSettings = drawerActions.get('[aria-label="Settings"]');
+    expect(drawerImport.classes()).toContain("icon-button");
+    expect(drawerSettings.classes()).toContain("icon-button");
+    expect(drawerImport.get("svg path").attributes("d")).toContain("M14 3H7");
+    expect(drawerSettings.get("svg path").attributes("d")).toContain("M4 21v-7");
+    expect(toggle.attributes("aria-expanded")).toBe("false");
+    expect(navigation.classes()).not.toContain("open");
+    expect(wrapper.find(".navigation-backdrop").exists()).toBe(false);
+    await toggle.trigger("click");
+    expect(toggle.attributes("aria-expanded")).toBe("true");
+    expect(navigation.classes()).toContain("open");
+    await wrapper.get(".navigation-backdrop").trigger("click");
+    expect(toggle.attributes("aria-expanded")).toBe("false");
+    expect(navigation.classes()).not.toContain("open");
   });
 
   /** Given nested folders, folder links drill down and breadcrumbs return to the root. */

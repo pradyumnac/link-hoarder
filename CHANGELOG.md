@@ -22,6 +22,7 @@
 
 ### Changed
 
+- Restructure collection navigation with smart destinations, source filters, and a responsive drawer (core-navigation-restructure).
 - Make CLI output readable, debuggable, repeatable, and explicit about error states (cli-output-resilience).
 - Read live Firefox and Zen databases through stable, read-only SQLite snapshots (import-live-snapshot).
 - Build and publish complete Diataxis documentation (docs-diataxis-site).

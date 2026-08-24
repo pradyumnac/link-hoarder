@@ -4,8 +4,8 @@ Store unresolved session findings in this file. Move each finding to its permane
 
 ## Execution state
 
-`main` contains the accepted compact-header redesign.
-The worktree is clean after the accepted change.
+`main` contains the accepted compact-header and collection-navigation redesigns.
+The worktree is clean after the accepted changes.
 
 The local ignored `stack/.env` sets `LINK_HOARDER_AB_ENABLED=true`.
 The A/B stack runs at `http://127.0.0.1:8080`.

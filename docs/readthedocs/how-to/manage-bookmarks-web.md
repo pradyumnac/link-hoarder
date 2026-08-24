@@ -11,8 +11,12 @@ mise run stack-up
 Type in the search box. The collection updates after you stop typing.
 Press Enter to run the search immediately.
 
-Use the filters in the left pane to limit the collection by tag or bookmark type.
-Type in the folder field, then select a matching folder from the dropdown.
+Select **All**, **Recent**, or **Needs organization** in the Library section.
+Use the expanded Sources section to limit the collection by domain.
+Expand **Tags** in the Browse section to limit the collection by tag.
+Expand **Folders**, then type in the folder field and select a matching folder.
+Use the expanded Filters section to select bookmarks or bookmarklets.
+On a narrow screen, select the header menu to open the navigation drawer.
 Use folder links to move to a child folder.
 Use the breadcrumbs to return to a parent folder.
 

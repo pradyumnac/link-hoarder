@@ -6,13 +6,13 @@ Task conventions: `todo-md-lite` skill. Shipped work is in `CHANGELOG.md`.
 
 | ID | Type | Status | Task | Depends | ADR | Triage |
 | --- | --- | --- | --- | --- | --- | --- |
-| core-navigation-restructure | design | pending | Restructure collection navigation around primary destinations | | | n |
 
 ## Future
 
 | ID | Type | Status | Task | Depends | ADR | Triage |
 | --- | --- | --- | --- | --- | --- | --- |
-| core-mobile-navigation | feature | pending | Replace mobile folder navigation | core-navigation-restructure | | n |
+| core-mobile-navigation | feature | pending | Replace mobile folder navigation | | | n |
+| core-wide-layout | design | pending | Optimize collection layout for wide screens | | | n |
 | core-folder-navigation | refactor | pending | Simplify desktop and mobile folder navigation | core-mobile-navigation | | n |
 | core-filter-chips | feature | pending | Add removable active-filter chips | core-folder-navigation | | n |
 | core-state-url | feature | pending | Persist collection state in the URL | core-filter-chips | | n |

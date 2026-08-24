@@ -13,12 +13,20 @@ import {
 const DEFAULT_ACCENT_COLOR = "#0d684d";
 const FETCH_SIZE = 1000;
 const PAGE_SIZE_OPTIONS = [10, 25, 50] as const;
+const RECENT_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 const SEARCH_DELAY_MS = 300;
 const SETTINGS_KEY = "link-hoarder.browser-settings";
 const VARIANT_COOKIE = "link_hoarder_variant";
 
 type BookmarkType = "all" | "bookmark" | "bookmarklet";
+type LibraryDestination = "all" | "needs-organization" | "recent";
 type UiVariant = "stable" | "staging";
+
+const LIBRARY_DESTINATIONS = [
+  { label: "All", value: "all" },
+  { label: "Recent", value: "recent" },
+  { label: "Needs organization", value: "needs-organization" },
+] as const satisfies ReadonlyArray<{ label: string; value: LibraryDestination }>;
 type PageSize = (typeof PAGE_SIZE_OPTIONS)[number];
 type ViewMode = "gallery" | "list";
 
@@ -112,6 +120,8 @@ const folderInput = ref("");
 const folderComboboxOpen = ref(false);
 const selectedTag = ref("");
 const selectedType = ref<BookmarkType>("all");
+const selectedLibraryDestination = ref<LibraryDestination>("all");
+const selectedSource = ref("");
 const settings = reactive<BrowserSettings>({ ...initialSettings });
 const uiVariant = ref<UiVariant>(loadUiVariant());
 const viewMode = ref<ViewMode>(initialSettings.defaultView);
@@ -124,6 +134,7 @@ const importFile = ref<File | null>(null);
 const importOpen = ref(false);
 const notificationOpen = ref(false);
 const settingsOpen = ref(false);
+const navigationOpen = ref(false);
 const notificationButton = ref<HTMLButtonElement | null>(null);
 const notificationPanel = ref<HTMLElement | null>(null);
 const settingsButton = ref<HTMLButtonElement | null>(null);
@@ -167,10 +178,32 @@ const childFolders = computed(() => {
 const tagOptions = computed(() =>
   [...new Set(bookmarks.value.flatMap((bookmark) => bookmark.tags ?? []))].sort(),
 );
-const filteredBookmarks = computed(() =>
-  bookmarks.value.filter((bookmark) => {
+const sourceOptions = computed(() => {
+  const counts = new Map<string, number>();
+  for (const bookmark of bookmarks.value) {
+    const source = bookmarkSource(bookmark);
+    if (source !== null) {
+      counts.set(source, (counts.get(source) ?? 0) + 1);
+    }
+  }
+  return [...counts]
+    .filter(([, count]) => count > 5)
+    .map(([source, count]) => ({ count, label: sourceLabel(source), source }))
+    .sort((left, right) => right.count - left.count || left.label.localeCompare(right.label));
+});
+const filteredBookmarks = computed(() => {
+  const recentCutoff = Date.now() - RECENT_WINDOW_MS;
+  return bookmarks.value.filter((bookmark) => {
     const isBookmarklet = bookmark.url.toLowerCase().startsWith("javascript:");
+    const matchesLibrary =
+      selectedLibraryDestination.value === "all" ||
+      (selectedLibraryDestination.value === "recent" &&
+        Date.parse(bookmark.created_at) >= recentCutoff) ||
+      (selectedLibraryDestination.value === "needs-organization" &&
+        (!bookmark.folder || !bookmark.tags?.length));
     return (
+      matchesLibrary &&
+      (!selectedSource.value || bookmarkSource(bookmark) === selectedSource.value) &&
       (!selectedFolder.value ||
         bookmark.folder === selectedFolder.value ||
         bookmark.folder?.startsWith(`${selectedFolder.value}/`)) &&
@@ -178,8 +211,8 @@ const filteredBookmarks = computed(() =>
       (selectedType.value === "all" ||
         (selectedType.value === "bookmarklet" ? isBookmarklet : !isBookmarklet))
     );
-  }),
-);
+  });
+});
 const total = computed(() => filteredBookmarks.value.length);
 const visibleBookmarks = computed(() =>
   filteredBookmarks.value.slice(offset.value, offset.value + settings.pageSize),
@@ -189,6 +222,27 @@ const pageCount = computed(() => Math.max(1, Math.ceil(total.value / settings.pa
 const unreadEventCount = computed(
   () => notificationEvents.value.filter((event) => event.unread).length,
 );
+
+function bookmarkSource(bookmark: Bookmark): string | null {
+  if (bookmark.url.toLowerCase().startsWith("javascript:")) {
+    return null;
+  }
+  try {
+    return new URL(bookmark.url).hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return null;
+  }
+}
+
+function sourceLabel(source: string): string {
+  const knownSources: Readonly<Record<string, string>> = {
+    "github.com": "GitHub",
+    "reddit.com": "Reddit",
+    "youtube.com": "YouTube",
+    "youtu.be": "YouTube",
+  };
+  return knownSources[source] ?? source;
+}
 
 function recordEvent(operation: string, message: string): void {
   notificationEvents.value.unshift({
@@ -429,6 +483,23 @@ function applyFilters(): void {
   offset.value = 0;
 }
 
+function selectLibraryDestination(destination: LibraryDestination): void {
+  selectedLibraryDestination.value = destination;
+  applyFilters();
+}
+
+function selectSource(source: string): void {
+  selectedSource.value = source;
+  applyFilters();
+}
+
+function closeFolderResults(event: FocusEvent): void {
+  const container = event.currentTarget;
+  if (container instanceof HTMLElement && !container.contains(event.relatedTarget as Node | null)) {
+    folderComboboxOpen.value = false;
+  }
+}
+
 function updateFolderInput(): void {
   selectedFolder.value = "";
   folderComboboxOpen.value = true;
@@ -580,6 +651,18 @@ onBeforeUnmount(() => {
           </svg>
           <span v-if="unreadEventCount > 0" class="notification-count">{{ unreadEventCount }}</span>
         </button>
+        <button
+          class="navigation-toggle secondary icon-button"
+          type="button"
+          aria-label="Open collection navigation"
+          aria-controls="collection-navigation"
+          :aria-expanded="navigationOpen"
+          @click="navigationOpen = true"
+        >
+          <svg aria-hidden="true" viewBox="0 0 24 24">
+            <path d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
         <section
           v-if="settingsOpen"
           id="settings-panel"
@@ -693,68 +776,141 @@ onBeforeUnmount(() => {
         <div><p class="eyebrow">{{ total }} saved</p><h2 id="collection-heading">Collection</h2></div>
       </div>
 
+      <button
+        v-if="navigationOpen"
+        class="navigation-backdrop"
+        type="button"
+        aria-label="Close collection navigation"
+        @click="navigationOpen = false"
+      ></button>
       <div class="collection-layout">
-        <aside class="collection-sidebar" aria-label="Collection navigation">
-          <nav aria-label="Library">
+        <aside
+          id="collection-navigation"
+          class="collection-sidebar"
+          :class="{ open: navigationOpen }"
+          aria-label="Collection navigation"
+        >
+          <div class="drawer-heading">
+            <button type="button" aria-label="Close collection navigation" @click="navigationOpen = false">×</button>
+          </div>
+          <div class="drawer-actions" aria-label="Mobile actions">
+            <button
+              class="drawer-import icon-button"
+              type="button"
+              aria-label="Import bookmarks"
+              @click="navigationOpen = false; importOpen = true"
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+                <path d="M14 3v5h5M8 13h8M13 10l3 3-3 3" />
+              </svg>
+            </button>
+            <button
+              class="drawer-settings icon-button"
+              type="button"
+              aria-label="Settings"
+              @click="navigationOpen = false; settingsOpen = true"
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6" />
+              </svg>
+            </button>
+          </div>
+          <nav class="library-destinations" aria-label="Library">
             <p class="sidebar-heading">Library</p>
             <button
+              v-for="destination in LIBRARY_DESTINATIONS"
+              :key="destination.value"
               class="sidebar-link"
-              :class="{ active: selectedFolder === '' }"
+              :class="{ active: selectedLibraryDestination === destination.value }"
               type="button"
-              :aria-current="selectedFolder === '' ? 'page' : undefined"
-              @click="navigateToFolder('')"
-            >All bookmarks</button>
-            <div v-if="childFolders.length" class="folder-tree">
-              <button
-                v-for="folder in childFolders"
-                :key="folder.path"
-                class="folder-link"
-                type="button"
-                :data-folder="folder.path"
-                @click="navigateToFolder(folder.path)"
-              >{{ folder.label }}</button>
-            </div>
+              :data-library-destination="destination.value"
+              :aria-current="selectedLibraryDestination === destination.value ? 'page' : undefined"
+              @click="selectLibraryDestination(destination.value)"
+            >{{ destination.label }}</button>
           </nav>
-          <div class="sidebar-filters" aria-label="Bookmark filters">
-            <p class="sidebar-heading">Filters</p>
-            <label>Tag
-              <select v-model="selectedTag" aria-label="Filter by tag" :disabled="tagOptions.length === 0" @change="applyFilters">
-                <option value="">All tags</option>
-                <option v-for="tag in tagOptions" :key="tag" :value="tag">{{ tag }}</option>
-              </select>
-            </label>
-            <label>Type
-              <select v-model="selectedType" aria-label="Filter by bookmark type" @change="applyFilters">
-                <option value="all">All types</option>
-                <option value="bookmark">Bookmarks</option>
-                <option value="bookmarklet">Bookmarklets</option>
-              </select>
-            </label>
-            <label>Folder
-              <div class="folder-combobox">
-                <input
-                  v-model="folderInput"
-                  type="search"
-                  role="combobox"
-                  aria-label="Filter by folder"
-                  aria-autocomplete="list"
-                  aria-controls="folder-filter-options"
-                  :aria-expanded="folderComboboxOpen"
-                  :disabled="folderOptions.length === 0"
-                  placeholder="Type a folder"
-                  @focus="folderComboboxOpen = true"
-                  @input="updateFolderInput"
-                  @keydown.esc="folderComboboxOpen = false"
-                />
-                <ul v-if="folderComboboxOpen" id="folder-filter-options" class="combobox-options" role="listbox">
-                  <li v-for="folder in matchingFolderOptions" :key="folder">
-                    <button type="button" role="option" @click="navigateToFolder(folder)">{{ folder }}</button>
-                  </li>
-                  <li v-if="matchingFolderOptions.length === 0" class="combobox-empty">No matching folders.</li>
-                </ul>
+          <details class="sidebar-sources" aria-label="Sources" open>
+            <summary class="sidebar-heading">Sources</summary>
+            <div class="source-options">
+              <button
+                class="source-link"
+                :class="{ active: selectedSource === '' }"
+                type="button"
+                data-source=""
+                @click="selectSource('')"
+              >All sources</button>
+              <button
+                v-for="source in sourceOptions"
+                :key="source.source"
+                class="source-link"
+                :class="{ active: selectedSource === source.source }"
+                type="button"
+                :data-source="source.source"
+                @click="selectSource(source.source)"
+              ><span>{{ source.label }}</span><span>{{ source.count }}</span></button>
+            </div>
+          </details>
+          <div class="sidebar-filters" aria-label="Browse bookmarks">
+            <p class="sidebar-heading">Browse</p>
+            <details class="browse-group">
+              <summary>Folders</summary>
+              <div class="browse-group-content">
+                <div class="folder-combobox" @focusout="closeFolderResults">
+                  <input
+                    v-model="folderInput"
+                    type="search"
+                    role="combobox"
+                    aria-label="Filter by folder"
+                    aria-autocomplete="list"
+                    aria-controls="folder-filter-options"
+                    :aria-expanded="folderComboboxOpen"
+                    :disabled="folderOptions.length === 0"
+                    placeholder="Find a folder"
+                    @focus="folderComboboxOpen = true"
+                    @input="updateFolderInput"
+                    @keydown.esc="folderComboboxOpen = false"
+                  />
+                  <ul v-if="folderComboboxOpen" id="folder-filter-options" class="combobox-options" role="listbox">
+                    <li v-for="folder in matchingFolderOptions" :key="folder">
+                      <button type="button" role="option" @click="navigateToFolder(folder)">{{ folder }}</button>
+                    </li>
+                    <li v-if="matchingFolderOptions.length === 0" class="combobox-empty">No matching folders.</li>
+                  </ul>
+                </div>
+                <div v-if="childFolders.length" class="folder-tree">
+                  <button
+                    v-for="folder in childFolders"
+                    :key="folder.path"
+                    class="folder-link"
+                    type="button"
+                    :data-folder="folder.path"
+                    @click="navigateToFolder(folder.path)"
+                  >{{ folder.label }}</button>
+                </div>
               </div>
-            </label>
+            </details>
+            <details class="browse-group">
+              <summary>Tags</summary>
+              <div class="browse-group-content">
+                <select v-model="selectedTag" aria-label="Filter by tag" :disabled="tagOptions.length === 0" @change="applyFilters">
+                  <option value="">All tags</option>
+                  <option v-for="tag in tagOptions" :key="tag" :value="tag">{{ tag }}</option>
+                </select>
+              </div>
+            </details>
           </div>
+          <details class="type-filter" open>
+            <summary class="sidebar-heading">Filters</summary>
+            <div class="browse-group-content">
+              <label>Type
+                <select v-model="selectedType" aria-label="Filter by bookmark type" @change="applyFilters">
+                  <option value="all">All types</option>
+                  <option value="bookmark">Bookmarks</option>
+                  <option value="bookmarklet">Bookmarklets</option>
+                </select>
+              </label>
+            </div>
+          </details>
           <div class="view-picker" aria-label="Collection view">
             <p class="sidebar-heading">View</p>
             <div class="view-options">
