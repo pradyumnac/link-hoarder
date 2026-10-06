@@ -136,8 +136,25 @@ describe("App", () => {
     expect(savedAt.text()).toMatch(/\d{4}/);
   });
 
-  /** Given a cached link preview, the card shows the preview title and text. */
-  it("shows the link preview inline on the bookmark card", async () => {
+  /** Given a cached link preview, the card keeps the saved title until preview opens. */
+  it("shows the saved title on the card before the preview popup opens", async () => {
+    const wrapper = mount(App);
+    await flushPromises();
+    await flushPromises();
+
+    expect(api.getBookmarkPreview).not.toHaveBeenCalled();
+    expect(wrapper.get(".bookmark-card h3").text()).toBe(bookmark.title);
+  });
+
+  /** Given a preview button click, the popup shows cached preview text. */
+  it("shows the link preview in a popup when the preview button is clicked", async () => {
+    const httpBookmark = { ...bookmark, url: "https://example.com/article" };
+    vi.mocked(api.listBookmarks).mockResolvedValue({
+      items: [httpBookmark],
+      limit: 10,
+      offset: 0,
+      total: 1,
+    });
     vi.mocked(api.getBookmarkPreview).mockResolvedValue({
       bookmark_id: 1,
       description: "Preview description.",
@@ -149,11 +166,40 @@ describe("App", () => {
     await flushPromises();
     await flushPromises();
 
-    const card = wrapper.get(".bookmark-card");
+    await wrapper.get(".preview-bookmark").trigger("click");
+    await flushPromises();
+
     expect(api.getBookmarkPreview).toHaveBeenCalledWith(1);
-    expect(card.get("h3").text()).toBe("Preview Title");
-    expect(card.get(".preview-description").text()).toBe("Preview description.");
-    expect(card.get(".bookmark-url").attributes("title")).toBe(bookmark.url);
+    const popup = wrapper.get(".preview-modal");
+    expect(popup.get("#preview-heading").text()).toBe("Preview Title");
+    expect(popup.get(".preview-modal-description").text()).toBe(
+      "Preview description.",
+    );
+    const link = popup.get(".bookmark-url");
+    expect(link.attributes("href")).toBe("https://example.com/article");
+    expect(link.attributes("target")).toBe("_blank");
+  });
+
+  /** Given an open preview popup, the close button dismisses it. */
+  it("closes the preview popup when the close button is clicked", async () => {
+    vi.mocked(api.getBookmarkPreview).mockResolvedValue({
+      bookmark_id: 1,
+      description: "Preview description.",
+      image_url: null,
+      site_name: "Example",
+      title: "Preview Title",
+    });
+    const wrapper = mount(App);
+    await flushPromises();
+    await flushPromises();
+
+    await wrapper.get(".preview-bookmark").trigger("click");
+    await flushPromises();
+    expect(wrapper.find(".preview-modal").exists()).toBe(true);
+
+    await wrapper.get(".preview-modal-close").trigger("click");
+
+    expect(wrapper.find(".preview-modal").exists()).toBe(false);
   });
 
   /** Given no version cookie, the top bar identifies stable as the active UI. */

@@ -151,7 +151,8 @@ code.bookmark-url { font-size: 0.77rem; }
 .bookmarklet { color: #884129; background: #f6ded5; text-transform: uppercase; }
 .actions { display: flex; align-items: flex-start; gap: 4px; }
 .bookmark-card { position: relative; }
-.preview-description { margin: 6px 0 0; color: #52635c; font-size: 0.84rem; }
+.preview-modal-description { margin: 6px 0 12px; color: #52635c; font-size: 0.9rem; }
+.preview-modal-image { width: 100%; max-height: 320px; margin: 12px 0; border-radius: 12px; object-fit: cover; }
 .empty { padding: 36px; color: #68746f; text-align: center; }
 .pagination { display: flex; align-items: center; justify-content: center; gap: 16px; padding-top: 22px; color: #64716c; font-size: 0.86rem; }
 

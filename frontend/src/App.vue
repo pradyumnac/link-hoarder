@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
 
 import {
   createBookmark,
@@ -416,32 +416,30 @@ function editBookmark(bookmark: Bookmark): void {
   editorOpen.value = true;
 }
 
-const previews = ref<Record<number, BookmarkPreview>>({});
+const previewTarget = ref<Bookmark | null>(null);
+const previewDetail = ref<BookmarkPreview | null>(null);
+const previewLoading = ref(false);
+const previewError = ref("");
 
-async function loadPreviews(): Promise<void> {
-  const visible = visibleBookmarks.value.filter(
-    (bookmark) => previews.value[bookmark.id] === undefined,
-  );
-  const loaded = await Promise.all(
-    visible.map(async (bookmark) => {
-      try {
-        return await getBookmarkPreview(bookmark.id);
-      } catch {
-        return null;
-      }
-    }),
-  );
-  for (const [index, bookmark] of visible.entries()) {
-    const found = loaded[index];
-    if (found !== undefined && found !== null) {
-      previews.value[bookmark.id] = found;
-    }
+async function openPreview(bookmark: Bookmark): Promise<void> {
+  previewTarget.value = bookmark;
+  previewDetail.value = null;
+  previewError.value = "";
+  previewLoading.value = true;
+  try {
+    previewDetail.value = await getBookmarkPreview(bookmark.id);
+  } catch (caught) {
+    previewError.value = messageFrom(caught);
+  } finally {
+    previewLoading.value = false;
   }
 }
 
-watch(visibleBookmarks, () => {
-  void loadPreviews();
-});
+function closePreview(): void {
+  previewTarget.value = null;
+  previewDetail.value = null;
+  previewError.value = "";
+}
 
 async function removeBookmark(bookmark: Bookmark): Promise<void> {
   if (!window.confirm(`Delete ${bookmark.title}?`)) {
@@ -845,6 +843,35 @@ onBeforeUnmount(() => {
       </section>
     </div>
 
+    <div v-if="previewTarget" class="modal-backdrop" @click.self="closePreview" @keydown.esc="closePreview">
+      <section class="bookmark-modal preview-modal" role="dialog" aria-modal="true" aria-labelledby="preview-heading">
+        <div class="section-heading">
+          <div><p class="eyebrow">{{ previewDetail?.site_name ?? "Link preview" }}</p><h2 id="preview-heading">{{ previewDetail?.title ?? previewTarget.title }}</h2></div>
+          <button class="modal-close preview-modal-close" type="button" aria-label="Close preview" @click="closePreview">×</button>
+        </div>
+        <p v-if="previewLoading" class="empty">Loading preview…</p>
+        <p v-else-if="previewError" class="message error" role="alert">{{ previewError }}</p>
+        <div v-else>
+          <img
+            v-if="previewTarget.thumbnail_url && !failedThumbnailIds.has(previewTarget.id)"
+            class="preview-modal-image"
+            :src="previewTarget.thumbnail_url"
+            alt=""
+            @error="hideThumbnail(previewTarget.id)"
+          />
+          <p v-if="previewDetail?.description" class="preview-modal-description">{{ previewDetail.description }}</p>
+          <p v-else class="empty">No preview text is cached for this link yet.</p>
+          <a
+            v-if="!previewTarget.url.startsWith('javascript:')"
+            class="bookmark-url"
+            :href="previewTarget.url"
+            target="_blank"
+            rel="noreferrer"
+          >Open original link</a>
+        </div>
+      </section>
+    </div>
+
     <section class="panel collection" aria-labelledby="collection-heading">
       <div class="section-heading collection-heading">
         <div><p class="eyebrow">{{ total }} saved</p><h2 id="collection-heading">Collection</h2></div>
@@ -1083,10 +1110,9 @@ onBeforeUnmount(() => {
                 />
                 <div class="bookmark-copy">
                   <div class="title-row">
-                    <h3>{{ previews[bookmark.id]?.title ?? bookmark.title }}</h3>
+                    <h3>{{ bookmark.title }}</h3>
                     <span v-if="bookmark.url.startsWith('javascript:')" class="bookmarklet">Bookmarklet</span>
                   </div>
-                  <p v-if="previews[bookmark.id]?.description" class="preview-description">{{ previews[bookmark.id]?.description }}</p>
                   <div class="meta-row">
                     <a
                       v-if="!bookmark.url.startsWith('javascript:')"
@@ -1104,7 +1130,7 @@ onBeforeUnmount(() => {
                   <div v-if="bookmark.tags?.length" class="tags"><span v-for="tag in bookmark.tags" :key="tag">{{ tag }}</span></div>
                 </div>
               </div>
-              <div class="actions"><button class="text-button icon-button edit-bookmark" type="button" :aria-label="`Edit ${bookmark.title}`" @click="editBookmark(bookmark)">✎</button><button class="icon-button delete-bookmark" type="button" :aria-label="`Delete ${bookmark.title}`" @click="removeBookmark(bookmark)"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14H6L5 6M10 11v5M14 11v5" /></svg></button></div>
+              <div class="actions"><button class="text-button icon-button preview-bookmark" type="button" :aria-label="`Preview ${bookmark.title}`" @click="openPreview(bookmark)">ⓘ</button><button class="text-button icon-button edit-bookmark" type="button" :aria-label="`Edit ${bookmark.title}`" @click="editBookmark(bookmark)">✎</button><button class="icon-button delete-bookmark" type="button" :aria-label="`Delete ${bookmark.title}`" @click="removeBookmark(bookmark)"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14H6L5 6M10 11v5M14 11v5" /></svg></button></div>
             </li>
           </ul>
 
