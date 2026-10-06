@@ -31,8 +31,8 @@ An explicit directory can override the saved value.
 | `LINK_HOARDER_DATABASE_PATH` | path | Platform user data directory | Select the local SQLite file. |
 | `LINK_HOARDER_METADATA_CACHE_PATH` | path | Platform user data directory | Select the sanitized bookmark image directory. |
 | `LINK_HOARDER_METADATA_REFRESH_ENABLED` | boolean | `true` | Enable background bookmark metadata refreshes. |
-| `LINK_HOARDER_PREVIEW_PROVIDER` | `python` or `link_preview_js` | `python` | Select the link preview backend. |
-| `LINK_HOARDER_PREVIEW_SERVICE_URL` | URL | `http://127.0.0.1:3001` | Set the link-preview-js sidecar base URL. |
+| `LINK_HOARDER_PREVIEW_PROVIDER` | `builtin` or `sidecar` | `builtin` | Select the link preview backend. |
+| `LINK_HOARDER_PREVIEW_SERVICE_URL` | URL | `http://127.0.0.1:3001` | Set the preview sidecar base URL. |
 | `LINK_HOARDER_LOG_LEVEL` | string | `INFO` | Set the structured log level. |
 | `LINK_HOARDER_HOST` | string | `127.0.0.1` | Set the API bind host. |
 | `LINK_HOARDER_PORT` | integer | `8000` | Set the direct API bind port. |
@@ -42,8 +42,8 @@ The direct API process also requires `LINK_HOARDER_API_KEY`.
 The Docker stack generates and stores a key when the variable is not set.
 In Docker Compose, `LINK_HOARDER_PORT` selects the frontend host port.
 The Docker stack stores the metadata cache in its persistent data volume.
-The Docker stack also runs the link-preview-js sidecar.
-Set `LINK_HOARDER_PREVIEW_PROVIDER=link_preview_js` to use it.
+The Docker stack also runs the preview sidecar.
+Set `LINK_HOARDER_PREVIEW_PROVIDER=sidecar` to use it.
 
 ## Browser settings
 

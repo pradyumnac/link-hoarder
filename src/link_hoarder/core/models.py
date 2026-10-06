@@ -57,8 +57,8 @@ class BookmarkSort(StrEnum):
 class PreviewProvider(StrEnum):
     """Link preview backend."""
 
-    PYTHON = "python"
-    LINK_PREVIEW_JS = "link_preview_js"
+    BUILTIN = "builtin"
+    SIDECAR = "sidecar"
 
 
 class BookmarkFields(SQLModel):

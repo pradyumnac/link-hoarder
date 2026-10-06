@@ -74,7 +74,7 @@ class ErrorDetail(BaseModel):
 
 def _default_metadata_fetcher(current: Settings) -> MetadataFetcher:
     """Select the metadata fetcher from the configured preview provider."""
-    if current.preview_provider is PreviewProvider.LINK_PREVIEW_JS:
+    if current.preview_provider is PreviewProvider.SIDECAR:
         return LinkPreviewFetcher(current.preview_service_url)
     return SecureMetadataFetcher()
 

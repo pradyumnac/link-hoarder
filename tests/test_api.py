@@ -79,7 +79,7 @@ def test_settings_reject_short_api_key() -> None:
 def test_default_fetcher_selects_configured_preview_provider() -> None:
     """Given a sidecar provider, app wiring selects the link preview fetcher."""
     sidecar = Settings(
-        preview_provider=PreviewProvider.LINK_PREVIEW_JS,
+        preview_provider=PreviewProvider.SIDECAR,
         preview_service_url="http://preview:3001",
     )
     fetcher = _default_metadata_fetcher(sidecar)
