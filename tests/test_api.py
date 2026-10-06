@@ -36,7 +36,13 @@ class StaticMetadataFetcher:
     def fetch(self, url: str) -> FetchedMetadata:
         """Return the local fixture as a favicon and thumbnail."""
         del url
-        return FetchedMetadata(favicon=self._content, thumbnail=self._content)
+        return FetchedMetadata(
+            favicon=self._content,
+            thumbnail=self._content,
+            title="Static Title",
+            description="Static description.",
+            site_name="Static Site",
+        )
 
 
 def _client(tmp_path: Path) -> TestClient:
@@ -831,3 +837,67 @@ def test_api_asset_reports_not_found_when_cached_file_disappears(
             cached.unlink()
 
         assert client.get(thumbnail_url, headers=_HEADERS).status_code == 404
+
+
+def test_api_preview_returns_nulls_before_refresh(tmp_path: Path) -> None:
+    """Given a bookmark without cached metadata, preview returns empty fields."""
+    client = _client(tmp_path)
+    created = client.post(
+        f"{_API_PREFIX}/bookmarks",
+        headers=_HEADERS,
+        json={"url": "https://example.com", "title": "Example"},
+    )
+    bookmark_id = created.json()["id"]
+
+    response = client.get(
+        f"{_API_PREFIX}/bookmarks/{bookmark_id}/preview", headers=_HEADERS
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "bookmark_id": bookmark_id,
+        "title": None,
+        "description": None,
+        "site_name": None,
+        "image_url": None,
+    }
+
+
+def test_api_preview_returns_cached_unfurl_fields(tmp_path: Path) -> None:
+    """Given refreshed metadata, preview returns cached text and image URL."""
+    settings = Settings(
+        database_path=tmp_path / "metadata.db",
+        metadata_cache_path=tmp_path / "metadata-cache",
+        metadata_refresh_enabled=True,
+        api_key=SecretStr(_API_KEY_VALUE),
+    )
+    with TestClient(create_app(settings, StaticMetadataFetcher())) as client:
+        created = client.post(
+            f"{_API_PREFIX}/bookmarks",
+            headers=_HEADERS,
+            json={"url": "https://example.com/preview", "title": "Example"},
+        )
+        bookmark_id = created.json()["id"]
+
+        deadline = time.monotonic() + 5
+        body: dict[str, object | None] = {}
+        while time.monotonic() < deadline:
+            body = client.get(
+                f"{_API_PREFIX}/bookmarks/{bookmark_id}/preview",
+                headers=_HEADERS,
+            ).json()
+            if body["title"] is not None:
+                break
+        assert body["title"] == "Static Title"
+        assert body["description"] == "Static description."
+        assert body["site_name"] == "Static Site"
+        assert body["image_url"] == f"{_API_PREFIX}/bookmarks/{bookmark_id}/thumbnail"
+
+
+def test_api_preview_rejects_unknown_bookmark(tmp_path: Path) -> None:
+    """Given an unknown identifier, preview returns a 404 error."""
+    client = _client(tmp_path)
+
+    response = client.get(f"{_API_PREFIX}/bookmarks/999/preview", headers=_HEADERS)
+
+    assert response.status_code == 404

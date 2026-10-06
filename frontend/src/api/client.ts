@@ -7,6 +7,7 @@ export type BookmarkUpdate = components["schemas"]["BookmarkUpdate"];
 export type BookmarkSort = "newest" | "oldest";
 type StoredBookmark = components["schemas"]["BookmarkRead"];
 export type HtmlImportResult = components["schemas"]["HtmlImportResult"];
+export type BookmarkPreview = components["schemas"]["BookmarkPreview"];
 export type JsonImportResult = components["schemas"]["JsonImportResult"];
 
 const API_PREFIX = "/api/v1";
@@ -65,6 +66,10 @@ export function updateBookmark(
 
 export function deleteBookmark(bookmarkId: number): Promise<void> {
   return request<void>(`/bookmarks/${bookmarkId}`, { method: "DELETE" });
+}
+
+export function getBookmarkPreview(bookmarkId: number): Promise<BookmarkPreview> {
+  return request<BookmarkPreview>(`/bookmarks/${bookmarkId}/preview`);
 }
 
 export function importBookmarkFile(file: File): Promise<HtmlImportResult> {

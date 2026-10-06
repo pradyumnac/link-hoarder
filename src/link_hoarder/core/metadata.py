@@ -104,6 +104,24 @@ class FetchedMetadata(BaseModel):
 
     favicon: bytes | None = None
     thumbnail: bytes | None = None
+    title: str | None = None
+    description: str | None = None
+    site_name: str | None = None
+
+
+_MAX_PREVIEW_TITLE_CHARS = 300
+_MAX_PREVIEW_DESCRIPTION_CHARS = 500
+_MAX_PREVIEW_SITE_CHARS = 255
+
+
+def _clean_preview_text(value: str | None, limit: int) -> str | None:
+    """Collapse whitespace and truncate preview text to a safe length."""
+    if value is None:
+        return None
+    cleaned = " ".join(value.split())
+    if not cleaned:
+        return None
+    return cleaned[:limit]
 
 
 class MetadataFetcher(Protocol):
@@ -119,26 +137,59 @@ class _HeadMetadataParser(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.favicon_urls: list[str] = []
         self.thumbnail_url: str | None = None
+        self.title: str | None = None
+        self.description: str | None = None
+        self.site_name: str | None = None
+        self._title_chunks: list[str] = []
+        self._in_title = False
         self.in_head = True
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        if tag.lower() == "body":
+        name = tag.lower()
+        if name == "body":
             self.in_head = False
+            return
+        if name == "title" and self.in_head:
+            self._in_title = True
             return
         if not self.in_head:
             return
-        values = {name.lower(): value for name, value in attrs if value is not None}
-        if tag.lower() == "link":
+        values = {
+            attr_name.lower(): attr_value
+            for attr_name, attr_value in attrs
+            if attr_value is not None
+        }
+        if name == "link":
             relations = set(values.get("rel", "").lower().split())
             href = values.get("href")
             if href and relations & _ICON_RELATIONS:
                 self.favicon_urls.append(href)
-        elif (
-            tag.lower() == "meta"
-            and values.get("property", "").lower() == "og:image"
-            and self.thumbnail_url is None
-        ):
-            self.thumbnail_url = values.get("content")
+        elif name == "meta":
+            content = values.get("content")
+            if not content:
+                return
+            key = values.get("property", "").lower() or values.get("name", "").lower()
+            if key == "og:image" and self.thumbnail_url is None:
+                self.thumbnail_url = content
+            elif key == "og:title" and self.title is None:
+                self.title = content
+            elif key in {"og:description", "description"} and self.description is None:
+                self.description = content
+            elif key == "og:site_name" and self.site_name is None:
+                self.site_name = content
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag.lower() == "title" and self._in_title:
+            self._in_title = False
+            if self.title is None:
+                text = "".join(self._title_chunks)
+                if text.strip():
+                    self.title = text
+            self._title_chunks = []
+
+    def handle_data(self, data: str) -> None:
+        if self._in_title:
+            self._title_chunks.append(data)
 
 
 class SecureMetadataFetcher:
@@ -176,7 +227,15 @@ class SecureMetadataFetcher:
             if thumbnail_url is not None
             else None
         )
-        return FetchedMetadata(favicon=favicon, thumbnail=thumbnail)
+        return FetchedMetadata(
+            favicon=favicon,
+            thumbnail=thumbnail,
+            title=_clean_preview_text(parser.title, _MAX_PREVIEW_TITLE_CHARS),
+            description=_clean_preview_text(
+                parser.description, _MAX_PREVIEW_DESCRIPTION_CHARS
+            ),
+            site_name=_clean_preview_text(parser.site_name, _MAX_PREVIEW_SITE_CHARS),
+        )
 
     def _first_available_image(
         self, urls: Sequence[str], *, maximum_size: tuple[int, int]
@@ -652,6 +711,9 @@ class BookmarkMetadataService:
                         status=MetadataStatus.READY,
                         favicon_file=favicon_file,
                         thumbnail_file=thumbnail_file,
+                        preview_title=fetched.title,
+                        preview_description=fetched.description,
+                        preview_site=fetched.site_name,
                         refreshed_at=now,
                         retry_after=now + _REFRESH_AFTER,
                     )

@@ -38,6 +38,7 @@ from link_hoarder.core.models import (
     BookmarkCreate,
     BookmarkPresentationPage,
     BookmarkPresentationRead,
+    BookmarkPreview,
     BookmarkRead,
     BookmarkSort,
     BookmarkUpdate,
@@ -226,6 +227,30 @@ def create_app(
                 detail="The bookmark has no cached thumbnail.",
             )
         return _cached_file_response(request, path, media_type="image/png")
+
+    @router.get("/bookmarks/{bookmark_id}/preview", tags=["bookmarks"])
+    def get_bookmark_preview(bookmark_id: int) -> BookmarkPreview:
+        bookmark = repository.get(bookmark_id)
+        if bookmark is None:
+            raise _not_found(bookmark_id)
+        metadata.queue_refresh(bookmark)
+        cached = repository.get_metadata(bookmark_id)
+        image_url = None
+        if (
+            cached is not None
+            and cached.thumbnail_file is not None
+            and metadata.asset_path(bookmark_id, "thumbnail") is not None
+        ):
+            image_url = f"{_API_PREFIX}/bookmarks/{bookmark_id}/thumbnail"
+        if cached is None:
+            return BookmarkPreview(bookmark_id=bookmark_id, image_url=image_url)
+        return BookmarkPreview(
+            bookmark_id=bookmark_id,
+            title=cached.preview_title,
+            description=cached.preview_description,
+            site_name=cached.preview_site,
+            image_url=image_url,
+        )
 
     @router.patch(
         "/bookmarks/{bookmark_id}",

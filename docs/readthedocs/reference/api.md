@@ -14,6 +14,9 @@ Resource routes use the `/api/v1` prefix. The `/health` route is not versioned.
 | `GET` | `/api/v1/bookmarks/{id}` | Get one bookmark. |
 | `PATCH` | `/api/v1/bookmarks/{id}` | Update supplied fields. |
 | `DELETE` | `/api/v1/bookmarks/{id}` | Delete one bookmark. |
+| `GET` | `/api/v1/bookmarks/{id}/favicon` | Get the cached favicon or a generated icon. |
+| `GET` | `/api/v1/bookmarks/{id}/thumbnail` | Get the cached page thumbnail. |
+| `GET` | `/api/v1/bookmarks/{id}/preview` | Get the cached link preview. |
 | `POST` | `/api/v1/imports/bookmarks-file` | Import a bookmark HTML export. |
 | `POST` | `/api/v1/imports/bookmarks-json` | Import a bookmark JSON export. |
 
@@ -31,3 +34,7 @@ with HTTP 422. The maximum JSON import size is 50000 bookmarks.
 Send a Netscape bookmark export as `text/html`. The maximum file size is 16 MiB.
 Send a CLI JSON export as `application/json`.
 The web API does not accept native browser profiles or server-local paths.
+
+The preview route returns cached `title`, `description`, `site_name`, and
+`image_url` fields. Missing fields contain `null` until a background refresh
+stores the page metadata. The route returns HTTP 404 for an unknown bookmark.

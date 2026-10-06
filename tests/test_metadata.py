@@ -88,6 +88,7 @@ from link_hoarder.core.metadata import (
     MetadataFetchError,
     RemoteResponse,
     SecureMetadataFetcher,
+    _HeadMetadataParser,
     _sanitize_image,
     _validated_destination,
     generated_domain_icon,
@@ -1208,3 +1209,88 @@ def test_asset_availability_performs_no_favicon_filesystem_check(
 def test_sweep_batch_never_exceeds_the_backfill_cap() -> None:
     """Given a sweep batch, it cannot be larger than the backfill admission cap."""
     assert metadata_module._SWEEP_BATCH_SIZE <= metadata_module._MAX_BACKFILL_PENDING
+
+
+def test_head_parser_reads_open_graph_preview_fields() -> None:
+    """Given OG meta tags, the parser captures image, title, description, and site."""
+    parser = _HeadMetadataParser()
+    parser.feed(
+        "<html><head>"
+        '<meta property="og:image" content="https://example.com/card.png">'
+        '<meta property="og:title" content="Card Title">'
+        '<meta property="og:description" content="Card description.">'
+        '<meta property="og:site_name" content="Example">'
+        "<title>Fallback Title</title>"
+        "</head><body></body></html>"
+    )
+
+    assert parser.thumbnail_url == "https://example.com/card.png"
+    assert parser.title == "Card Title"
+    assert parser.description == "Card description."
+    assert parser.site_name == "Example"
+
+
+def test_head_parser_falls_back_to_title_and_meta_description() -> None:
+    """Given no OG text tags, the parser uses title and meta description."""
+    parser = _HeadMetadataParser()
+    parser.feed(
+        "<html><head>"
+        "<title>  Plain   Title </title>"
+        '<meta name="description" content="Plain description.">'
+        "</head><body></body></html>"
+    )
+
+    assert parser.title == "  Plain   Title "
+    assert parser.description == "Plain description."
+    assert parser.site_name is None
+
+
+def test_head_parser_ignores_body_content() -> None:
+    """Given body markup, the parser keeps only head metadata."""
+    parser = _HeadMetadataParser()
+    parser.feed(
+        "<html><head><title>Head Title</title></head>"
+        "<body>"
+        '<meta property="og:title" content="Body Title">'
+        "<title>Body Title</title>"
+        "</body></html>"
+    )
+
+    assert parser.title == "Head Title"
+
+
+class PreviewFetcher:
+    """Return deterministic preview text without network access."""
+
+    def fetch(self, url: str) -> FetchedMetadata:
+        """Return fixed preview fields for any URL."""
+        del url
+        return FetchedMetadata(
+            title="Preview Title",
+            description="Preview description.",
+            site_name="Example",
+        )
+
+
+def test_metadata_service_stores_preview_text(
+    repository: BookmarkRepository, tmp_path: Path
+) -> None:
+    """Given fetched preview text, the service stores it on the metadata row."""
+    service = BookmarkMetadataService(
+        repository,
+        tmp_path / "cache",
+        fetcher=PreviewFetcher(),
+        enabled=False,
+    )
+    bookmark = repository.create(
+        BookmarkCreate(url="https://example.com/preview", title="Example")
+    )
+
+    service.refresh(bookmark)
+
+    cached = repository.get_metadata(bookmark.id)
+    assert cached is not None
+    assert cached.preview_title == "Preview Title"
+    assert cached.preview_description == "Preview description."
+    assert cached.preview_site == "Example"
+    service.close()

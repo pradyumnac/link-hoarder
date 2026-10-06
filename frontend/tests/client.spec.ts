@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { importBookmarkFile, importBookmarkJson, listBookmarks } from "../src/api/client";
+import {
+  getBookmarkPreview,
+  importBookmarkFile,
+  importBookmarkJson,
+  listBookmarks,
+} from "../src/api/client";
 
 describe("API client", () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -77,6 +82,25 @@ describe("API client", () => {
         method: "POST",
       }),
     );
+  });
+
+  it("fetches one bookmark preview through the versioned endpoint", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          bookmark_id: 7,
+          description: "Preview description.",
+          image_url: null,
+          site_name: "Example",
+          title: "Preview Title",
+        }),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await getBookmarkPreview(7);
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/v1/bookmarks/7/preview", undefined);
   });
 
   it("returns the API detail when a request fails", async () => {

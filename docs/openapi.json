@@ -176,6 +176,64 @@
         "title": "BookmarkPresentationRead",
         "type": "object"
       },
+      "BookmarkPreview": {
+        "description": "Cached link preview for one bookmark.",
+        "properties": {
+          "bookmark_id": {
+            "title": "Bookmark Id",
+            "type": "integer"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "image_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Url"
+          },
+          "site_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Site Name"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "required": [
+          "bookmark_id"
+        ],
+        "title": "BookmarkPreview",
+        "type": "object"
+      },
       "BookmarkRead": {
         "description": "Bookmark output.",
         "properties": {
@@ -920,6 +978,53 @@
           }
         ],
         "summary": "Get Bookmark Favicon",
+        "tags": [
+          "bookmarks"
+        ]
+      }
+    },
+    "/api/v1/bookmarks/{bookmark_id}/preview": {
+      "get": {
+        "operationId": "get_bookmark_preview_api_v1_bookmarks__bookmark_id__preview_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bookmark_id",
+            "required": true,
+            "schema": {
+              "title": "Bookmark Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookmarkPreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "summary": "Get Bookmark Preview",
         "tags": [
           "bookmarks"
         ]

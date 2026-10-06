@@ -75,6 +75,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/bookmarks/{bookmark_id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Bookmark Preview */
+        get: operations["get_bookmark_preview_api_v1_bookmarks__bookmark_id__preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/bookmarks/{bookmark_id}/thumbnail": {
         parameters: {
             query?: never;
@@ -210,6 +227,22 @@ export interface components {
             updated_at: string;
             /** Url */
             url: string;
+        };
+        /**
+         * BookmarkPreview
+         * @description Cached link preview for one bookmark.
+         */
+        BookmarkPreview: {
+            /** Bookmark Id */
+            bookmark_id: number;
+            /** Description */
+            description?: string | null;
+            /** Image Url */
+            image_url?: string | null;
+            /** Site Name */
+            site_name?: string | null;
+            /** Title */
+            title?: string | null;
         };
         /**
          * BookmarkRead
@@ -601,6 +634,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_bookmark_preview_api_v1_bookmarks__bookmark_id__preview_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                bookmark_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookmarkPreview"];
                 };
             };
             /** @description Validation Error */

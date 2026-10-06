@@ -31,6 +31,7 @@ An explicit directory can override the saved value.
 | `LINK_HOARDER_DATABASE_PATH` | path | Platform user data directory | Select the local SQLite file. |
 | `LINK_HOARDER_METADATA_CACHE_PATH` | path | Platform user data directory | Select the sanitized bookmark image directory. |
 | `LINK_HOARDER_METADATA_REFRESH_ENABLED` | boolean | `true` | Enable background bookmark metadata refreshes. |
+| `LINK_HOARDER_PREVIEW_PROVIDER` | `python` or `link_preview_js` | `python` | Select the link preview backend. |
 | `LINK_HOARDER_LOG_LEVEL` | string | `INFO` | Set the structured log level. |
 | `LINK_HOARDER_HOST` | string | `127.0.0.1` | Set the API bind host. |
 | `LINK_HOARDER_PORT` | integer | `8000` | Set the direct API bind port. |

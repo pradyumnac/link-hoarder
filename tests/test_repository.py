@@ -11,6 +11,7 @@ core-metadata-backfill.sweep (bookmarks needing metadata):
 """
 
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
@@ -267,3 +268,35 @@ def test_list_needing_metadata_respects_the_limit(
     needing = repository.list_needing_metadata(limit=2)
 
     assert len(needing) == 2
+
+
+def test_repository_initialize_adds_preview_columns_to_existing_table(
+    tmp_path: Path,
+) -> None:
+    """Given a metadata table from an older release, init adds preview columns."""
+    import sqlite3
+
+    path = tmp_path / "legacy.db"
+    connection = sqlite3.connect(path)
+    connection.execute(
+        "CREATE TABLE bookmarks (id INTEGER PRIMARY KEY, url TEXT, title TEXT)"
+    )
+    connection.execute(
+        "CREATE TABLE bookmark_metadata ("
+        "bookmark_id INTEGER PRIMARY KEY, source_url TEXT, status TEXT, "
+        "favicon_file TEXT, thumbnail_file TEXT, "
+        "refreshed_at TEXT, retry_after TEXT)"
+    )
+    connection.commit()
+    connection.close()
+    repository = BookmarkRepository.from_path(path)
+
+    repository.initialize()
+
+    columns = {
+        row[1]
+        for row in sqlite3.connect(path).execute("PRAGMA table_info(bookmark_metadata)")
+    }
+    repository.close()
+
+    assert {"preview_title", "preview_description", "preview_site"} <= columns

@@ -150,6 +150,8 @@ code.bookmark-url { font-size: 0.77rem; }
 .tags span, .bookmarklet { padding: 4px 8px; border-radius: 999px; background: #ece9dc; color: #52635c; font-size: 0.7rem; font-weight: 750; }
 .bookmarklet { color: #884129; background: #f6ded5; text-transform: uppercase; }
 .actions { display: flex; align-items: flex-start; gap: 4px; }
+.bookmark-card { position: relative; }
+.preview-description { margin: 6px 0 0; color: #52635c; font-size: 0.84rem; }
 .empty { padding: 36px; color: #68746f; text-align: center; }
 .pagination { display: flex; align-items: center; justify-content: center; gap: 16px; padding-top: 22px; color: #64716c; font-size: 0.86rem; }
 

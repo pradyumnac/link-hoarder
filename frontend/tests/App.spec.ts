@@ -10,6 +10,7 @@ vi.mock("../src/api/client", async (loadOriginal) => {
     ...original,
     createBookmark: vi.fn(),
     deleteBookmark: vi.fn(),
+    getBookmarkPreview: vi.fn(),
     importBookmarkFile: vi.fn(),
     importBookmarkJson: vi.fn(),
     listBookmarks: vi.fn(),
@@ -38,6 +39,13 @@ describe("App", () => {
       limit: 10,
       offset: 0,
       total: 1,
+    });
+    vi.mocked(api.getBookmarkPreview).mockReset().mockResolvedValue({
+      bookmark_id: 0,
+      description: null,
+      image_url: null,
+      site_name: null,
+      title: null,
     });
   });
 
@@ -126,6 +134,26 @@ describe("App", () => {
     expect(savedAt.attributes("datetime")).toBe(bookmark.created_at);
     expect(savedAt.attributes("title")).toMatch(/\d{4}/);
     expect(savedAt.text()).toMatch(/\d{4}/);
+  });
+
+  /** Given a cached link preview, the card shows the preview title and text. */
+  it("shows the link preview inline on the bookmark card", async () => {
+    vi.mocked(api.getBookmarkPreview).mockResolvedValue({
+      bookmark_id: 1,
+      description: "Preview description.",
+      image_url: null,
+      site_name: "Example",
+      title: "Preview Title",
+    });
+    const wrapper = mount(App);
+    await flushPromises();
+    await flushPromises();
+
+    const card = wrapper.get(".bookmark-card");
+    expect(api.getBookmarkPreview).toHaveBeenCalledWith(1);
+    expect(card.get("h3").text()).toBe("Preview Title");
+    expect(card.get(".preview-description").text()).toBe("Preview description.");
+    expect(card.get(".bookmark-url").attributes("title")).toBe(bookmark.url);
   });
 
   /** Given no version cookie, the top bar identifies stable as the active UI. */

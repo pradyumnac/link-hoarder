@@ -54,6 +54,13 @@ class BookmarkSort(StrEnum):
     OLDEST = "oldest"
 
 
+class PreviewProvider(StrEnum):
+    """Link preview backend."""
+
+    PYTHON = "python"
+    LINK_PREVIEW_JS = "link_preview_js"
+
+
 class BookmarkFields(SQLModel):
     """Fields shared by bookmark input and storage models."""
 
@@ -162,8 +169,21 @@ class BookmarkMetadataRecord(SQLModel, table=True):
     status: MetadataStatus
     favicon_file: str | None = Field(default=None, max_length=255)
     thumbnail_file: str | None = Field(default=None, max_length=255)
+    preview_title: str | None = Field(default=None, max_length=300)
+    preview_description: str | None = Field(default=None, max_length=500)
+    preview_site: str | None = Field(default=None, max_length=255)
     refreshed_at: datetime
     retry_after: datetime
+
+
+class BookmarkPreview(SQLModel):
+    """Cached link preview for one bookmark."""
+
+    bookmark_id: int
+    title: str | None = None
+    description: str | None = None
+    site_name: str | None = None
+    image_url: str | None = None
 
 
 class ImportWarningCode(StrEnum):

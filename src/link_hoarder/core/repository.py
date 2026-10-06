@@ -52,6 +52,18 @@ class BookmarkRepository:
             connection.exec_driver_sql(
                 "CREATE UNIQUE INDEX IF NOT EXISTS ux_bookmarks_url ON bookmarks (url)"
             )
+            for column, definition in (
+                ("preview_title", "VARCHAR(300)"),
+                ("preview_description", "VARCHAR(500)"),
+                ("preview_site", "VARCHAR(255)"),
+            ):
+                existing = connection.exec_driver_sql(
+                    "PRAGMA table_info(bookmark_metadata)"
+                ).fetchall()
+                if column not in {row[1] for row in existing}:
+                    connection.exec_driver_sql(
+                        f"ALTER TABLE bookmark_metadata ADD COLUMN {column} {definition}"
+                    )
 
     def close(self) -> None:
         """Release database engine resources."""

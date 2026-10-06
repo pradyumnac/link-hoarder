@@ -1,14 +1,16 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 
 import {
   createBookmark,
   deleteBookmark,
+  getBookmarkPreview,
   importBookmarkFile,
   importBookmarkJson,
   listBookmarks,
   updateBookmark,
   type Bookmark,
+  type BookmarkPreview,
   type BookmarkSort,
 } from "./api/client";
 import { formatBookmarkDate, formatLocalDateTime } from "./format";
@@ -413,6 +415,33 @@ function editBookmark(bookmark: Bookmark): void {
   form.url = bookmark.url;
   editorOpen.value = true;
 }
+
+const previews = ref<Record<number, BookmarkPreview>>({});
+
+async function loadPreviews(): Promise<void> {
+  const visible = visibleBookmarks.value.filter(
+    (bookmark) => previews.value[bookmark.id] === undefined,
+  );
+  const loaded = await Promise.all(
+    visible.map(async (bookmark) => {
+      try {
+        return await getBookmarkPreview(bookmark.id);
+      } catch {
+        return null;
+      }
+    }),
+  );
+  for (const [index, bookmark] of visible.entries()) {
+    const found = loaded[index];
+    if (found !== undefined && found !== null) {
+      previews.value[bookmark.id] = found;
+    }
+  }
+}
+
+watch(visibleBookmarks, () => {
+  void loadPreviews();
+});
 
 async function removeBookmark(bookmark: Bookmark): Promise<void> {
   if (!window.confirm(`Delete ${bookmark.title}?`)) {
@@ -1054,9 +1083,10 @@ onBeforeUnmount(() => {
                 />
                 <div class="bookmark-copy">
                   <div class="title-row">
-                    <h3>{{ bookmark.title }}</h3>
+                    <h3>{{ previews[bookmark.id]?.title ?? bookmark.title }}</h3>
                     <span v-if="bookmark.url.startsWith('javascript:')" class="bookmarklet">Bookmarklet</span>
                   </div>
+                  <p v-if="previews[bookmark.id]?.description" class="preview-description">{{ previews[bookmark.id]?.description }}</p>
                   <div class="meta-row">
                     <a
                       v-if="!bookmark.url.startsWith('javascript:')"
