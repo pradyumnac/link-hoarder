@@ -102,6 +102,10 @@ run = "stack/ab-stack.sh down"
 description = "Seed Docker web from the host CLI database via bulk JSON import"
 run = "stack/seed-web.sh"
 
+[tasks.stack-metadata-status]
+description = "Show bookmark metadata refresh progress in the running stack"
+run = "stack/metadata-status.sh"
+
 [tasks.ab-check]
 description = "Verify Stable and Staging selection through the running A/B stack"
 run = "stack/check-ab-switch.sh"
