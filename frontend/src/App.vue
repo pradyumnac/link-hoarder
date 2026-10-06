@@ -11,6 +11,7 @@ import {
   type Bookmark,
   type BookmarkSort,
 } from "./api/client";
+import { formatBookmarkDate, formatLocalDateTime } from "./format";
 
 const DEFAULT_ACCENT_COLOR = "#0d684d";
 const FETCH_SIZE = 1000;
@@ -1068,6 +1069,7 @@ onBeforeUnmount(() => {
                     >{{ conciseBookmarkUrl(bookmark.url) }}</a>
                     <code v-else class="bookmark-url" :title="bookmark.url">{{ bookmark.url }}</code>
                     <span v-if="bookmark.folder" class="folder" :title="bookmark.folder">{{ bookmark.folder }}</span>
+                    <time class="saved-at" :datetime="bookmark.created_at" :title="formatLocalDateTime(bookmark.created_at)">{{ formatBookmarkDate(bookmark.created_at) }}</time>
                   </div>
                   <div v-if="bookmark.tags?.length" class="tags"><span v-for="tag in bookmark.tags" :key="tag">{{ tag }}</span></div>
                 </div>

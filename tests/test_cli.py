@@ -2,6 +2,8 @@
 
 import importlib
 import json
+import re
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -91,9 +93,21 @@ def test_cli_list_and_get_use_text_by_default_and_json_on_request(
     assert "[1] Example" in listed_text.stdout
     assert "Folder: Research" in listed_text.stdout
     assert "Tags: docs" in listed_text.stdout
+    assert re.search(r"Saved: \d{4}-\d{2}-\d{2} \d{2}:\d{2}", listed_text.stdout)
     assert fetched_text.stdout == listed_text.stdout
     assert json.loads(listed_json.stdout)[0]["title"] == "Example"
     assert json.loads(fetched_json.stdout)["title"] == "Example"
+
+
+def test_bookmark_text_treats_naive_timestamps_as_utc() -> None:
+    """Given a naive stored timestamp, text output converts from UTC to local time."""
+    expected = (
+        datetime(2020, 5, 4, 12, 0, tzinfo=UTC)
+        .astimezone()
+        .strftime("%Y-%m-%d %H:%M %Z")
+    )
+
+    assert cli_module._local_text(datetime(2020, 5, 4, 12, 0)) == expected  # noqa: DTZ001 - naive input is the case under test
 
 
 def test_cli_empty_list_supports_text_and_json(

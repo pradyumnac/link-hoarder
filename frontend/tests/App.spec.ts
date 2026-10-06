@@ -117,6 +117,17 @@ describe("App", () => {
     expect(document.documentElement.style.getPropertyValue("--accent")).toBe("#7c3aed");
   });
 
+  /** Given a listed bookmark, the card shows its save date with machine time. */
+  it("shows each bookmark save date on its card", async () => {
+    const wrapper = mount(App);
+    await flushPromises();
+
+    const savedAt = wrapper.get(".bookmark-card .saved-at");
+    expect(savedAt.attributes("datetime")).toBe(bookmark.created_at);
+    expect(savedAt.attributes("title")).toMatch(/\d{4}/);
+    expect(savedAt.text()).toMatch(/\d{4}/);
+  });
+
   /** Given no version cookie, the top bar identifies stable as the active UI. */
   it("uses the stable UI as the default variant", async () => {
     const wrapper = mount(App);

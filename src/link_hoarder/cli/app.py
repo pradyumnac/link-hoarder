@@ -4,6 +4,7 @@ import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from enum import IntEnum
 from pathlib import Path
 from typing import Annotated
@@ -96,11 +97,18 @@ def _debug(context: typer.Context, checkpoint: str, **details: object) -> None:
     typer.echo(f"{message} {suffix}".rstrip(), err=True)
 
 
+def _local_text(value: datetime) -> str:
+    """Render a stored UTC timestamp in local time."""
+    aware = value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+    return aware.astimezone().strftime("%Y-%m-%d %H:%M %Z")
+
+
 def _bookmark_text(bookmark: BookmarkRead) -> str:
     lines = [
         f"[{bookmark.id}] {bookmark.title}",
         f"  URL: {bookmark.url}",
         f"  Source: {bookmark.source.value}",
+        f"  Saved: {_local_text(bookmark.created_at)}",
     ]
     if bookmark.folder:
         lines.append(f"  Folder: {bookmark.folder}")
