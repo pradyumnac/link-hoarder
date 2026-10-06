@@ -696,6 +696,33 @@ describe("App", () => {
     expect(wrapper.get('[aria-label="Close import"]').text()).toBe("×");
   });
 
+  /** Given a delete request, a styled confirmation modal asks before deleting. */
+  it("confirms deletion through a styled modal dialog", async () => {
+    const wrapper = mount(App);
+    await flushPromises();
+
+    await wrapper.get('[aria-label="Delete Reader"]').trigger("click");
+    expect(wrapper.get("#delete-heading").text()).toBe("Delete this bookmark?");
+    expect(wrapper.get(".delete-modal").text()).toContain("Reader");
+    expect(api.deleteBookmark).not.toHaveBeenCalled();
+
+    await wrapper.get(".delete-modal .danger").trigger("click");
+    await flushPromises();
+    expect(api.deleteBookmark).toHaveBeenCalledWith(1);
+    expect(wrapper.find(".delete-modal").exists()).toBe(false);
+  });
+
+  /** Given a cancelled delete request, the bookmark stays and the modal closes. */
+  it("cancels deletion without calling the API", async () => {
+    const wrapper = mount(App);
+    await flushPromises();
+
+    await wrapper.get('[aria-label="Delete Reader"]').trigger("click");
+    await wrapper.get(".delete-modal .secondary").trigger("click");
+    expect(api.deleteBookmark).not.toHaveBeenCalled();
+    expect(wrapper.find(".delete-modal").exists()).toBe(false);
+  });
+
   /** Given an open header panel, inside interaction keeps it open and outside click closes it. */
   it("dismisses header panels on outside click", async () => {
     const wrapper = mount(App, { attachTo: document.body });

@@ -420,6 +420,7 @@ const previewTarget = ref<Bookmark | null>(null);
 const previewDetail = ref<BookmarkPreview | null>(null);
 const previewLoading = ref(false);
 const previewError = ref("");
+const deleteTarget = ref<Bookmark | null>(null);
 
 async function openPreview(bookmark: Bookmark): Promise<void> {
   previewTarget.value = bookmark;
@@ -441,10 +442,20 @@ function closePreview(): void {
   previewError.value = "";
 }
 
-async function removeBookmark(bookmark: Bookmark): Promise<void> {
-  if (!window.confirm(`Delete ${bookmark.title}?`)) {
+function askDelete(bookmark: Bookmark): void {
+  deleteTarget.value = bookmark;
+}
+
+function cancelDelete(): void {
+  deleteTarget.value = null;
+}
+
+async function confirmDelete(): Promise<void> {
+  const bookmark = deleteTarget.value;
+  if (bookmark === null) {
     return;
   }
+  deleteTarget.value = null;
   try {
     await deleteBookmark(bookmark.id);
     notice.value = "Bookmark deleted.";
@@ -872,6 +883,20 @@ onBeforeUnmount(() => {
       </section>
     </div>
 
+    <div v-if="deleteTarget" class="modal-backdrop" @click.self="cancelDelete" @keydown.esc="cancelDelete">
+      <section class="bookmark-modal delete-modal" role="dialog" aria-modal="true" aria-labelledby="delete-heading">
+        <div class="section-heading">
+          <div><p class="eyebrow">Confirm deletion</p><h2 id="delete-heading">Delete this bookmark?</h2></div>
+          <button class="modal-close delete-modal-close" type="button" aria-label="Close deletion dialog" @click="cancelDelete">×</button>
+        </div>
+        <p class="preview-modal-description">{{ deleteTarget.title }}</p>
+        <div class="modal-actions">
+          <button class="secondary" type="button" @click="cancelDelete">Cancel</button>
+          <button class="danger" type="button" @click="confirmDelete">Delete</button>
+        </div>
+      </section>
+    </div>
+
     <section class="panel collection" aria-labelledby="collection-heading">
       <div class="section-heading collection-heading">
         <div><p class="eyebrow">{{ total }} saved</p><h2 id="collection-heading">Collection</h2></div>
@@ -1130,7 +1155,7 @@ onBeforeUnmount(() => {
                   <div v-if="bookmark.tags?.length" class="tags"><span v-for="tag in bookmark.tags" :key="tag">{{ tag }}</span></div>
                 </div>
               </div>
-              <div class="actions"><button class="text-button icon-button preview-bookmark" type="button" :aria-label="`Preview ${bookmark.title}`" @click="openPreview(bookmark)">ⓘ</button><button class="text-button icon-button edit-bookmark" type="button" :aria-label="`Edit ${bookmark.title}`" @click="editBookmark(bookmark)">✎</button><button class="icon-button delete-bookmark" type="button" :aria-label="`Delete ${bookmark.title}`" @click="removeBookmark(bookmark)"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14H6L5 6M10 11v5M14 11v5" /></svg></button></div>
+              <div class="actions"><button class="text-button icon-button preview-bookmark" type="button" :aria-label="`Preview ${bookmark.title}`" @click="openPreview(bookmark)">ⓘ</button><button class="text-button icon-button edit-bookmark" type="button" :aria-label="`Edit ${bookmark.title}`" @click="editBookmark(bookmark)">✎</button><button class="icon-button delete-bookmark" type="button" :aria-label="`Delete ${bookmark.title}`" @click="askDelete(bookmark)"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14H6L5 6M10 11v5M14 11v5" /></svg></button></div>
             </li>
           </ul>
 
