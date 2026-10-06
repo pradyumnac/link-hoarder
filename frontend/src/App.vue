@@ -5,6 +5,7 @@ import {
   createBookmark,
   deleteBookmark,
   importBookmarkFile,
+  importBookmarkJson,
   listBookmarks,
   updateBookmark,
   type Bookmark,
@@ -553,14 +554,21 @@ function selectImportFile(event: Event): void {
   importFile.value = input.files?.[0] ?? null;
 }
 
+function isJsonImport(file: File): boolean {
+  return file.name.toLowerCase().endsWith(".json") || file.type === "application/json";
+}
+
 async function runImport(): Promise<void> {
   if (importFile.value === null) {
-    error.value = "Select a bookmark HTML export file.";
+    error.value = "Select a bookmark HTML or JSON export file.";
     recordEvent("Import bookmarks", error.value);
     return;
   }
   try {
-    const result = await importBookmarkFile(importFile.value);
+    const file = importFile.value;
+    const result = isJsonImport(file)
+      ? await importBookmarkJson(file)
+      : await importBookmarkFile(file);
     const summary = `Imported ${result.imported}; skipped ${result.skipped}.`;
     const warnings = result.warnings ?? [];
     for (const warning of warnings) {
@@ -787,11 +795,11 @@ onBeforeUnmount(() => {
     <div v-if="importOpen" class="modal-backdrop" @click.self="closeImport" @keydown.esc="closeImport">
       <section class="bookmark-modal import-modal" role="dialog" aria-modal="true" aria-labelledby="import-heading">
         <div class="section-heading">
-          <div><p class="eyebrow">Browser export</p><h2 id="import-heading">Import bookmark HTML</h2></div>
+          <div><p class="eyebrow">Bookmark export</p><h2 id="import-heading">Import bookmarks</h2></div>
           <button class="modal-close import-modal-close" type="button" aria-label="Close import" @click="closeImport">×</button>
         </div>
         <form class="import-form" @submit.prevent="runImport">
-          <label>Bookmark export<input type="file" accept=".html,.htm,text/html" required @change="selectImportFile" /></label>
+          <label>Bookmark export<input type="file" accept=".html,.htm,.json,text/html,application/json" required @change="selectImportFile" /></label>
           <button class="secondary" type="submit">Import bookmarks</button>
         </form>
       </section>

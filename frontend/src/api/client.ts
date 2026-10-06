@@ -6,6 +6,7 @@ export type BookmarkPage = components["schemas"]["BookmarkPresentationPage"];
 export type BookmarkUpdate = components["schemas"]["BookmarkUpdate"];
 type StoredBookmark = components["schemas"]["BookmarkRead"];
 export type HtmlImportResult = components["schemas"]["HtmlImportResult"];
+export type JsonImportResult = components["schemas"]["JsonImportResult"];
 
 const API_PREFIX = "/api/v1";
 
@@ -65,6 +66,14 @@ export function importBookmarkFile(file: File): Promise<HtmlImportResult> {
   return request<HtmlImportResult>("/imports/bookmarks-file", {
     body: file,
     headers: { "Content-Type": "text/html" },
+    method: "POST",
+  });
+}
+
+export function importBookmarkJson(file: File): Promise<JsonImportResult> {
+  return request<JsonImportResult>("/imports/bookmarks-json", {
+    body: file,
+    headers: { "Content-Type": "application/json" },
     method: "POST",
   });
 }

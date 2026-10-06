@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { importBookmarkFile, listBookmarks } from "../src/api/client";
+import { importBookmarkFile, importBookmarkJson, listBookmarks } from "../src/api/client";
 
 describe("API client", () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -44,6 +44,36 @@ describe("API client", () => {
       expect.objectContaining({
         body: file,
         headers: { "Content-Type": "text/html" },
+        method: "POST",
+      }),
+    );
+  });
+
+  it("uploads bookmark JSON to the JSON import endpoint", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          discovered: 1,
+          format: "link_hoarder_json",
+          imported: 1,
+          profiles: 1,
+          skipped: 0,
+          warnings: [],
+        }),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const file = new File(["[]"], "bookmarks.json", {
+      type: "application/json",
+    });
+
+    await importBookmarkJson(file);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/imports/bookmarks-json",
+      expect.objectContaining({
+        body: file,
+        headers: { "Content-Type": "application/json" },
         method: "POST",
       }),
     );

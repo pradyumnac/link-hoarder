@@ -11,6 +11,7 @@ vi.mock("../src/api/client", async (loadOriginal) => {
     createBookmark: vi.fn(),
     deleteBookmark: vi.fn(),
     importBookmarkFile: vi.fn(),
+    importBookmarkJson: vi.fn(),
     listBookmarks: vi.fn(),
     updateBookmark: vi.fn(),
   };
@@ -808,8 +809,59 @@ describe("App", () => {
     await wrapper.get(".import-form").trigger("submit");
 
     expect(wrapper.get('[role="alert"]').text()).toContain(
-      "Select a bookmark HTML export file.",
+      "Select a bookmark HTML or JSON export file.",
     );
     expect(wrapper.get(".notification-count").text()).toBe("1");
+  });
+
+  /** Given a JSON export file, the import uses the JSON endpoint. */
+  it("sends a JSON export to the JSON import endpoint", async () => {
+    vi.mocked(api.importBookmarkJson).mockResolvedValue({
+      format: "link_hoarder_json",
+      discovered: 1,
+      imported: 1,
+      profiles: 1,
+      skipped: 0,
+      warnings: [],
+    });
+    const wrapper = mount(App);
+    await flushPromises();
+    await wrapper.get(".import-bookmarks").trigger("click");
+    const input = wrapper.get('input[type="file"]');
+    const file = new File(["[]"], "bookmarks.json", { type: "application/json" });
+    Object.defineProperty(input.element, "files", { value: [file] });
+
+    await input.trigger("change");
+    await wrapper.get(".import-form").trigger("submit");
+    await flushPromises();
+
+    expect(api.importBookmarkJson).toHaveBeenCalledWith(file);
+    expect(api.importBookmarkFile).not.toHaveBeenCalled();
+    expect(wrapper.get(".notice").text()).toContain("Imported 1; skipped 0.");
+  });
+
+  /** Given an HTML export file, the import keeps using the HTML endpoint. */
+  it("sends an HTML export to the HTML import endpoint", async () => {
+    vi.mocked(api.importBookmarkFile).mockResolvedValue({
+      format: "netscape_html",
+      discovered: 1,
+      imported: 1,
+      profiles: 1,
+      skipped: 0,
+      warnings: [],
+    });
+    const wrapper = mount(App);
+    await flushPromises();
+    await wrapper.get(".import-bookmarks").trigger("click");
+    const input = wrapper.get('input[type="file"]');
+    const file = new File(["<DL><p>"], "bookmarks.html", { type: "text/html" });
+    Object.defineProperty(input.element, "files", { value: [file] });
+
+    await input.trigger("change");
+    await wrapper.get(".import-form").trigger("submit");
+    await flushPromises();
+
+    expect(api.importBookmarkFile).toHaveBeenCalledWith(file);
+    expect(api.importBookmarkJson).not.toHaveBeenCalled();
   });
 });

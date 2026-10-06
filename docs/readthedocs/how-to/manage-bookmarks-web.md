@@ -39,10 +39,10 @@ Select **Save bookmark**.
 Select the Edit icon on a bookmark to open the populated form.
 Change the values, then select **Save changes**.
 
-## Import bookmark HTML
+## Import bookmarks
 
 Select the Import icon to open the import dialog.
-Select a Netscape bookmark HTML export file.
+Select a Netscape bookmark HTML export file or a CLI JSON export file.
 Select **Import bookmarks**.
 
 The notification panel shows import warnings and completion events.
