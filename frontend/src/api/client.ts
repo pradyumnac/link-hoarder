@@ -4,6 +4,7 @@ export type Bookmark = components["schemas"]["BookmarkPresentationRead"];
 export type BookmarkCreate = components["schemas"]["BookmarkCreate"];
 export type BookmarkPage = components["schemas"]["BookmarkPresentationPage"];
 export type BookmarkUpdate = components["schemas"]["BookmarkUpdate"];
+export type BookmarkSort = "newest" | "oldest";
 type StoredBookmark = components["schemas"]["BookmarkRead"];
 export type HtmlImportResult = components["schemas"]["HtmlImportResult"];
 export type JsonImportResult = components["schemas"]["JsonImportResult"];
@@ -28,6 +29,7 @@ export function listBookmarks(
   query: string,
   limit: number,
   offset: number,
+  sort?: BookmarkSort,
 ): Promise<BookmarkPage> {
   const parameters = new URLSearchParams({
     limit: String(limit),
@@ -35,6 +37,9 @@ export function listBookmarks(
   });
   if (query) {
     parameters.set("query", query);
+  }
+  if (sort !== undefined) {
+    parameters.set("sort", sort);
   }
   return request<BookmarkPage>(`/bookmarks?${parameters.toString()}`);
 }

@@ -75,6 +75,7 @@ class BookmarkHtmlParser(HTMLParser):
         self.profile = profile
         self.result = ProfileReadResult()
         self._anchor_url: str | None = None
+        self._anchor_added: str | None = None
         self._anchor_text: list[str] = []
         self._folder_text: list[str] = []
         self._pending_folder: str | None = None
@@ -84,7 +85,9 @@ class BookmarkHtmlParser(HTMLParser):
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         if tag == "a":
-            self._anchor_url = dict(attrs).get("href")
+            attributes = dict(attrs)
+            self._anchor_url = attributes.get("href")
+            self._anchor_added = attributes.get("add_date")
             self._anchor_text = []
         elif tag == "h3":
             self._reading_folder = True
@@ -106,6 +109,7 @@ class BookmarkHtmlParser(HTMLParser):
         if tag == "a" and self._anchor_url is not None:
             self._add_bookmark()
             self._anchor_url = None
+            self._anchor_added = None
             self._anchor_text = []
         elif tag == "h3":
             self._reading_folder = False
@@ -127,6 +131,7 @@ class BookmarkHtmlParser(HTMLParser):
                 title=title,
                 folder="/".join(self._folders) or None,
                 source=BookmarkSource.HTML,
+                created_at=_unix_time(self._anchor_added),
             )
         except ValidationError:
             self.result.warnings.append(
@@ -430,6 +435,7 @@ def _walk_chrome(
                 title=node.name or node.url,
                 folder=folder,
                 source=source,
+                created_at=_safe_chromium_time(node.date_added),
             )
         except ValidationError:
             result.warnings.append(
@@ -458,7 +464,8 @@ def _read_firefox(browser: Browser, path: Path) -> ProfileReadResult:
             source.backup(connection)
             rows = connection.execute(
                 """
-                SELECT p.url, COALESCE(b.title, p.title, p.url), f.title
+                SELECT p.url, COALESCE(b.title, p.title, p.url), f.title,
+                    p.dateAdded
                 FROM moz_bookmarks AS b
                 JOIN moz_places AS p ON p.id = b.fk
                 LEFT JOIN moz_bookmarks AS f ON f.id = b.parent
@@ -476,6 +483,7 @@ def _read_firefox(browser: Browser, path: Path) -> ProfileReadResult:
                 title=title,
                 folder=cast(str | None, row[2]),
                 source=BookmarkSource(browser.value),
+                created_at=_unix_micro_time(row[3]),
             )
         except ValidationError:
             result.warnings.append(
@@ -504,3 +512,31 @@ def chromium_time(value: str | None) -> datetime | None:
     if not value:
         return None
     return datetime(1601, 1, 1, tzinfo=UTC) + timedelta(microseconds=int(value))
+
+
+def _safe_chromium_time(value: str | None) -> datetime | None:
+    """Convert a Chromium timestamp, ignoring malformed values."""
+    try:
+        return chromium_time(value)
+    except OverflowError, ValueError:
+        return None
+
+
+def _unix_time(value: str | None) -> datetime | None:
+    """Convert a Unix timestamp in seconds, ignoring malformed values."""
+    if not value:
+        return None
+    try:
+        return datetime.fromtimestamp(int(value), tz=UTC)
+    except OverflowError, OSError, ValueError:
+        return None
+
+
+def _unix_micro_time(value: object) -> datetime | None:
+    """Convert a Unix timestamp in microseconds, ignoring bad values."""
+    if not isinstance(value, int):
+        return None
+    try:
+        return datetime.fromtimestamp(value / 1_000_000, tz=UTC)
+    except OverflowError, OSError, ValueError:
+        return None

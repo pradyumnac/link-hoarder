@@ -2,6 +2,7 @@
 
 import json
 import sqlite3
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -157,6 +158,108 @@ def test_read_chromium_nested_bookmark(
     assert result.warnings == []
 
 
+def test_read_chromium_preserves_original_save_time(tmp_path: Path) -> None:
+    """Given Chromium date_added values, the importer keeps the save time."""
+    profile = tmp_path / "Bookmarks"
+    profile.write_text(
+        json.dumps(
+            {
+                "roots": {
+                    "bookmark_bar": {
+                        "children": [
+                            {
+                                "name": "Old",
+                                "type": "url",
+                                "url": "https://old.example",
+                                "date_added": "13100000000000000",
+                            },
+                            {
+                                "name": "No date",
+                                "type": "url",
+                                "url": "https://nodate.example",
+                            },
+                            {
+                                "name": "Bad date",
+                                "type": "url",
+                                "url": "https://baddate.example",
+                                "date_added": "not-a-timestamp",
+                            },
+                        ]
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = read_profile(Browser.CHROME, profile)
+
+    assert len(result.bookmarks) == 3
+    assert result.bookmarks[0].created_at == datetime(
+        2016, 2, 15, 8, 53, 20, tzinfo=UTC
+    )
+    assert result.bookmarks[1].created_at is None
+    assert result.bookmarks[2].created_at is None
+    assert result.warnings == []
+
+
+def test_import_chromium_stores_original_save_time(
+    tmp_path: Path, repository: BookmarkRepository
+) -> None:
+    """Given a Chromium profile, import stores the original save time."""
+    profile = tmp_path / "Bookmarks"
+    profile.write_text(
+        json.dumps(
+            {
+                "roots": {
+                    "bookmark_bar": {
+                        "children": [
+                            {
+                                "name": "Old",
+                                "type": "url",
+                                "url": "https://old.example",
+                                "date_added": "13100000000000000",
+                            }
+                        ]
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    summary = import_profiles(repository, Browser.CHROME, profile)
+    stored = repository.find_by_url("https://old.example/")
+
+    assert summary.imported == 1
+    assert stored is not None
+    assert stored.created_at == datetime(2016, 2, 15, 8, 53, 20, tzinfo=UTC).replace(
+        tzinfo=None
+    )
+
+
+def test_read_html_export_preserves_add_date(tmp_path: Path) -> None:
+    """Given HTML ADD_DATE values, the importer keeps the save time."""
+    export = tmp_path / "bookmarks.html"
+    export.write_text(
+        """<!DOCTYPE NETSCAPE-Bookmark-file-1>
+<DL><p>
+  <DT><A HREF="https://old.example" ADD_DATE="1435584000">Old</A>
+  <DT><A HREF="https://nodate.example">No date</A>
+  <DT><A HREF="https://baddate.example" ADD_DATE="not-a-timestamp">Bad date</A>
+</DL><p>
+""",
+        encoding="utf-8",
+    )
+
+    result = read_html_export(export)
+
+    assert len(result.bookmarks) == 3
+    assert result.bookmarks[0].created_at == datetime(2015, 6, 29, 13, 20, tzinfo=UTC)
+    assert result.bookmarks[1].created_at is None
+    assert result.bookmarks[2].created_at is None
+
+
 def test_read_chromium_imports_bookmarklet(tmp_path: Path) -> None:
     """Given a Chromium bookmarklet, the importer preserves its JavaScript URL."""
     profile = tmp_path / "Bookmarks"
@@ -243,11 +346,13 @@ def test_read_firefox_bookmark(tmp_path: Path, browser: Browser, source: str) ->
     with sqlite3.connect(profile) as connection:
         connection.executescript(
             """
-            CREATE TABLE moz_places (id INTEGER PRIMARY KEY, url TEXT, title TEXT);
+            CREATE TABLE moz_places (
+                id INTEGER PRIMARY KEY, url TEXT, title TEXT, dateAdded INTEGER
+            );
             CREATE TABLE moz_bookmarks (
                 id INTEGER PRIMARY KEY, fk INTEGER, type INTEGER, title TEXT, parent INTEGER
             );
-            INSERT INTO moz_places VALUES (1, 'https://example.com', 'Example');
+            INSERT INTO moz_places VALUES (1, 'https://example.com', 'Example', 1680000000000000);
             INSERT INTO moz_bookmarks VALUES (10, NULL, 2, 'Toolbar', 0);
             INSERT INTO moz_bookmarks VALUES (11, 1, 1, NULL, 10);
             """
@@ -259,6 +364,7 @@ def test_read_firefox_bookmark(tmp_path: Path, browser: Browser, source: str) ->
     assert result.bookmarks[0].source == source
     assert result.bookmarks[0].title == "Example"
     assert result.bookmarks[0].folder == "Toolbar"
+    assert result.bookmarks[0].created_at == datetime(2023, 3, 28, 10, 40, tzinfo=UTC)
 
 
 def test_read_zen_uses_a_stable_live_snapshot(tmp_path: Path) -> None:
@@ -270,19 +376,21 @@ def test_read_zen_uses_a_stable_live_snapshot(tmp_path: Path) -> None:
             """
             PRAGMA journal_mode=WAL;
             PRAGMA wal_autocheckpoint=0;
-            CREATE TABLE moz_places (id INTEGER PRIMARY KEY, url TEXT, title TEXT);
+            CREATE TABLE moz_places (
+                id INTEGER PRIMARY KEY, url TEXT, title TEXT, dateAdded INTEGER
+            );
             CREATE TABLE moz_bookmarks (
                 id INTEGER PRIMARY KEY, fk INTEGER, type INTEGER, title TEXT, parent INTEGER
             );
             INSERT INTO moz_bookmarks VALUES (10, NULL, 2, 'Toolbar', 0);
-            INSERT INTO moz_places VALUES (1, 'https://one.example', 'One');
+            INSERT INTO moz_places VALUES (1, 'https://one.example', 'One', NULL);
             INSERT INTO moz_bookmarks VALUES (11, 1, 1, NULL, 10);
             """
         )
         writer.commit()
         writer.executescript(
             """
-            INSERT INTO moz_places VALUES (2, 'https://two.example', 'Two');
+            INSERT INTO moz_places VALUES (2, 'https://two.example', 'Two', NULL);
             INSERT INTO moz_bookmarks VALUES (12, 2, 1, NULL, 10);
             """
         )
@@ -292,7 +400,7 @@ def test_read_zen_uses_a_stable_live_snapshot(tmp_path: Path) -> None:
 
         writer.executescript(
             """
-            INSERT INTO moz_places VALUES (3, 'https://three.example', 'Three');
+            INSERT INTO moz_places VALUES (3, 'https://three.example', 'Three', NULL);
             INSERT INTO moz_bookmarks VALUES (13, 3, 1, NULL, 10);
             """
         )

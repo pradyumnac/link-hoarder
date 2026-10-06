@@ -2,7 +2,12 @@
 
 from typing import Protocol
 
-from link_hoarder.core.models import BookmarkCreate, BookmarkRead, BookmarkUpdate
+from link_hoarder.core.models import (
+    BookmarkCreate,
+    BookmarkRead,
+    BookmarkSort,
+    BookmarkUpdate,
+)
 
 
 class BookmarkBackendError(Exception):
@@ -37,9 +42,14 @@ class BookmarkBackend(Protocol):
         ...
 
     def list(
-        self, *, query: str | None = None, limit: int = 100, offset: int = 0
+        self,
+        *,
+        query: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+        sort: BookmarkSort | None = None,
     ) -> list[BookmarkRead]:
-        """List bookmarks with optional search and pagination."""
+        """List bookmarks with optional search, pagination, and sort order."""
         ...
 
     def update(self, bookmark_id: int, update: BookmarkUpdate) -> BookmarkRead | None:

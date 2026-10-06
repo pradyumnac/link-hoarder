@@ -16,6 +16,7 @@ from link_hoarder.core.models import (
     BookmarkCreate,
     BookmarkPage,
     BookmarkRead,
+    BookmarkSort,
     BookmarkUpdate,
 )
 
@@ -79,12 +80,19 @@ class ApiBookmarkBackend:
         return self._validate(BookmarkRead, response)
 
     def list(
-        self, *, query: str | None = None, limit: int = 100, offset: int = 0
+        self,
+        *,
+        query: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+        sort: BookmarkSort | None = None,
     ) -> list[BookmarkRead]:
-        """List bookmarks with optional search and pagination."""
+        """List bookmarks with optional search, pagination, and sort order."""
         parameters: dict[str, str | int] = {"limit": limit, "offset": offset}
         if query is not None:
             parameters["query"] = query
+        if sort is not None:
+            parameters["sort"] = sort.value
         response = self._request("GET", f"/bookmarks?{urlencode(parameters)}")
         return self._validate(BookmarkPage, response).items
 

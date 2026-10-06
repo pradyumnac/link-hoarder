@@ -39,6 +39,7 @@ from link_hoarder.core.models import (
     BookmarkPresentationPage,
     BookmarkPresentationRead,
     BookmarkRead,
+    BookmarkSort,
     BookmarkUpdate,
     HtmlImportResult,
     ImportWarning,
@@ -165,8 +166,9 @@ def create_app(
         query: Annotated[str | None, Query()] = None,
         limit: Annotated[int, Query(ge=1, le=1000)] = 100,
         offset: Annotated[int, Query(ge=0)] = 0,
+        sort: Annotated[BookmarkSort | None, Query()] = None,
     ) -> BookmarkPresentationPage:
-        bookmarks = repository.list(query=query, limit=limit, offset=offset)
+        bookmarks = repository.list(query=query, limit=limit, offset=offset, sort=sort)
         metadata.queue_refresh_many(bookmarks)
         availability = metadata.asset_availability(bookmarks)
         return BookmarkPresentationPage(

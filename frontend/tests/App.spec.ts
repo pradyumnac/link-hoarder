@@ -153,6 +153,7 @@ describe("App", () => {
       accentColor: "#0d684d",
       defaultView: "gallery",
       pageSize: 25,
+      sortOrder: "newest",
     });
     expect(wrapper.get(".bookmark-list").classes()).toContain("gallery-view");
   });
@@ -171,6 +172,7 @@ describe("App", () => {
       accentColor: "#7c3aed",
       defaultView: "list",
       pageSize: 10,
+      sortOrder: "newest",
     });
   });
 
@@ -215,7 +217,7 @@ describe("App", () => {
 
     expect(api.listBookmarks).toHaveBeenCalledTimes(1);
     await vi.advanceTimersByTimeAsync(1);
-    expect(api.listBookmarks).toHaveBeenLastCalledWith("reader", 1000, 0);
+    expect(api.listBookmarks).toHaveBeenLastCalledWith("reader", 1000, 0, "newest");
     expect(api.listBookmarks).toHaveBeenCalledTimes(2);
   });
 
@@ -232,7 +234,7 @@ describe("App", () => {
     await flushPromises();
 
     expect(searchInput.element).toHaveProperty("value", "");
-    expect(api.listBookmarks).toHaveBeenLastCalledWith("", 1000, 0);
+    expect(api.listBookmarks).toHaveBeenLastCalledWith("", 1000, 0, "newest");
     expect(document.activeElement).toBe(searchInput.element);
     expect(wrapper.find('[aria-label="Clear search"]').exists()).toBe(false);
     wrapper.unmount();
@@ -863,5 +865,22 @@ describe("App", () => {
 
     expect(api.importBookmarkFile).toHaveBeenCalledWith(file);
     expect(api.importBookmarkJson).not.toHaveBeenCalled();
+  });
+
+  /** Given the collection, the sort picker reloads bookmarks in save-time order. */
+  it("reloads bookmarks in the selected sort order", async () => {
+    const wrapper = mount(App);
+    await flushPromises();
+
+    expect(vi.mocked(api.listBookmarks).mock.calls[0]?.[3]).toBe("newest");
+
+    await wrapper.get('[aria-label="Sort oldest first"]').trigger("click");
+    await flushPromises();
+
+    const calls = vi.mocked(api.listBookmarks).mock.calls;
+    expect(calls[calls.length - 1]?.[3]).toBe("oldest");
+    const stored = window.localStorage.getItem("link-hoarder.browser-settings") ?? "{}";
+    expect((JSON.parse(stored) as { sortOrder: string }).sortOrder).toBe("oldest");
+    expect(wrapper.get('[aria-label="Sort oldest first"]').attributes("aria-pressed")).toBe("true");
   });
 });

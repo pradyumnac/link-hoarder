@@ -109,6 +109,25 @@ def test_cli_empty_list_supports_text_and_json(
     assert json.loads(json_result.stdout) == []
 
 
+def test_cli_list_accepts_save_time_sort(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Given stored bookmarks, list --sort orders by original save time."""
+    monkeypatch.setenv("LINK_HOARDER_DATABASE_PATH", str(tmp_path / "cli.db"))
+    runner.invoke(app, ["create", "https://old.example", "--title", "Old"])
+    runner.invoke(app, ["create", "https://new.example", "--title", "New"])
+
+    newest = runner.invoke(app, ["list", "--json", "--sort", "newest"])
+    oldest = runner.invoke(app, ["list", "--json", "--sort", "oldest"])
+    invalid = runner.invoke(app, ["list", "--sort", "random"])
+
+    assert newest.exit_code == 0
+    assert [item["title"] for item in json.loads(newest.stdout)] == ["New", "Old"]
+    assert oldest.exit_code == 0
+    assert [item["title"] for item in json.loads(oldest.stdout)] == ["Old", "New"]
+    assert invalid.exit_code != 0
+
+
 def test_cli_debug_writes_checkpoints_to_stderr(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

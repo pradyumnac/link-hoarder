@@ -33,6 +33,7 @@ Native browser import files remain on the CLI host.
 
 `list` and `get` write readable text by default.
 Add `--json` to either command for structured JSON.
+Add `--sort newest` or `--sort oldest` to `list` to order by original save time.
 Create, update, import, and export results use JSON on standard output.
 These commands write concise completion feedback to standard error.
 

@@ -47,6 +47,13 @@ class BookmarkSource(StrEnum):
     ZEN = "zen"
 
 
+class BookmarkSort(StrEnum):
+    """Bookmark list sort order by original save time."""
+
+    NEWEST = "newest"
+    OLDEST = "oldest"
+
+
 class BookmarkFields(SQLModel):
     """Fields shared by bookmark input and storage models."""
 
@@ -75,6 +82,9 @@ class BookmarkRecord(BookmarkFields, table=True):
 
 class BookmarkCreate(BookmarkFields):
     """Bookmark creation input."""
+
+    created_at: datetime | None = Field(default=None)
+    """Original save time. Importers set this; creation time is the default."""
 
     @model_validator(mode="after")
     def tag_bookmarklet(self) -> BookmarkCreate:

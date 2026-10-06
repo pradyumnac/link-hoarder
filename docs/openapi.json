@@ -4,6 +4,18 @@
       "BookmarkCreate": {
         "description": "Bookmark creation input.",
         "properties": {
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
           "folder": {
             "anyOf": [
               {
@@ -226,6 +238,15 @@
         ],
         "title": "BookmarkRead",
         "type": "object"
+      },
+      "BookmarkSort": {
+        "description": "Bookmark list sort order by original save time.",
+        "enum": [
+          "newest",
+          "oldest"
+        ],
+        "title": "BookmarkSort",
+        "type": "string"
       },
       "BookmarkSource": {
         "description": "Bookmark origin.",
@@ -555,6 +576,22 @@
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/BookmarkSort"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sort"
             }
           }
         ],

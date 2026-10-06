@@ -38,6 +38,7 @@ from link_hoarder.core.logging import configure_logging
 from link_hoarder.core.models import (
     BookmarkCreate,
     BookmarkRead,
+    BookmarkSort,
     BookmarkUpdate,
     Browser,
     ImportSummary,
@@ -200,13 +201,17 @@ def list_bookmarks(
         int, typer.Option(min=1, max=1000, help="Maximum result count.")
     ] = 100,
     offset: Annotated[int, typer.Option(min=0, help="Result offset.")] = 0,
+    sort: Annotated[
+        BookmarkSort | None,
+        typer.Option(help="Sort by original save time: newest or oldest."),
+    ] = None,
     json_output: Annotated[
         bool, typer.Option("--json", help="Write structured JSON output.")
     ] = False,
 ) -> None:
     """List bookmarks as JSON."""
     with _backend(context) as backend:
-        bookmarks = backend.list(query=query, limit=limit, offset=offset)
+        bookmarks = backend.list(query=query, limit=limit, offset=offset, sort=sort)
     _debug(context, "list_complete", count=len(bookmarks), offset=offset)
     if json_output:
         typer.echo(

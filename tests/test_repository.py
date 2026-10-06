@@ -18,6 +18,7 @@ from pydantic import ValidationError
 from link_hoarder.core.models import (
     BookmarkCreate,
     BookmarkMetadataRecord,
+    BookmarkSort,
     BookmarkUpdate,
     MetadataStatus,
 )
@@ -105,6 +106,112 @@ def test_bookmark_rejects_invalid_url() -> None:
     """Given a non-URL string, bookmark validation rejects the input."""
     with pytest.raises(ValidationError):
         BookmarkCreate(url="not-a-url", title="Invalid")
+
+
+def test_repository_create_preserves_explicit_created_at(
+    repository: BookmarkRepository,
+) -> None:
+    """Given an explicit save time, create stores it instead of the import time."""
+    saved = datetime(2015, 6, 30, 12, 0, tzinfo=UTC)
+
+    created = repository.create(
+        BookmarkCreate(url="https://example.com", title="Example", created_at=saved)
+    )
+
+    # SQLite drops the UTC offset on write, so stored times read back naive.
+    assert created.created_at == saved.replace(tzinfo=None)
+    assert created.updated_at == saved.replace(tzinfo=None)
+
+
+def test_repository_create_defaults_created_at_to_now(
+    repository: BookmarkRepository,
+) -> None:
+    """Given no save time, create stamps the bookmark with the current time."""
+    before = datetime.now(UTC).replace(tzinfo=None)
+
+    created = repository.create(
+        BookmarkCreate(url="https://example.com", title="Example")
+    )
+
+    assert created.created_at is not None
+    assert before <= created.created_at <= datetime.now(UTC).replace(tzinfo=None)
+
+
+def test_repository_list_sorts_by_save_time(repository: BookmarkRepository) -> None:
+    """Given newest and oldest sorts, list orders by original save time."""
+    repository.create(
+        BookmarkCreate(
+            url="https://old.example",
+            title="Old",
+            created_at=datetime(2015, 6, 30, tzinfo=UTC),
+        )
+    )
+    repository.create(
+        BookmarkCreate(
+            url="https://new.example",
+            title="New",
+            created_at=datetime(2020, 1, 15, tzinfo=UTC),
+        )
+    )
+    repository.create(
+        BookmarkCreate(
+            url="https://middle.example",
+            title="Middle",
+            created_at=datetime(2018, 3, 10, tzinfo=UTC),
+        )
+    )
+
+    assert [item.title for item in repository.list()] == ["Old", "New", "Middle"]
+    assert [item.title for item in repository.list(sort=BookmarkSort.NEWEST)] == [
+        "New",
+        "Middle",
+        "Old",
+    ]
+    assert [item.title for item in repository.list(sort=BookmarkSort.OLDEST)] == [
+        "Old",
+        "Middle",
+        "New",
+    ]
+
+
+def test_repository_list_sort_is_stable_for_equal_save_times(
+    repository: BookmarkRepository,
+) -> None:
+    """Given equal save times, sorted lists keep identifier order."""
+    saved = datetime(2019, 5, 1, tzinfo=UTC)
+    repository.create(
+        BookmarkCreate(url="https://a.example", title="A", created_at=saved)
+    )
+    repository.create(
+        BookmarkCreate(url="https://b.example", title="B", created_at=saved)
+    )
+
+    assert [item.title for item in repository.list(sort=BookmarkSort.NEWEST)] == [
+        "A",
+        "B",
+    ]
+    assert [item.title for item in repository.list(sort=BookmarkSort.OLDEST)] == [
+        "A",
+        "B",
+    ]
+
+
+def test_repository_list_sort_combines_with_query_and_pagination(
+    repository: BookmarkRepository,
+) -> None:
+    """Given a query and page window, sort applies before pagination."""
+    for index in range(4):
+        repository.create(
+            BookmarkCreate(
+                url=f"https://tool-{index}.example",
+                title=f"Tool {index}",
+                created_at=datetime(2020, 1, index + 1, tzinfo=UTC),
+            )
+        )
+
+    page = repository.list(query="tool", limit=2, offset=1, sort=BookmarkSort.NEWEST)
+
+    assert [item.title for item in page] == ["Tool 2", "Tool 1"]
 
 
 def test_list_needing_metadata_finds_missing_and_stale_rows(

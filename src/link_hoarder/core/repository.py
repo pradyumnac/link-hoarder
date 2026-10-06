@@ -17,6 +17,7 @@ from link_hoarder.core.models import (
     BookmarkMetadataRecord,
     BookmarkRead,
     BookmarkRecord,
+    BookmarkSort,
     BookmarkUpdate,
 )
 
@@ -64,7 +65,12 @@ class BookmarkRepository:
 
     def create(self, bookmark: BookmarkCreate) -> BookmarkRead:
         """Create one bookmark."""
-        record = BookmarkRecord.model_validate(bookmark)
+        record = BookmarkRecord.model_validate(
+            bookmark.model_dump(exclude={"created_at"})
+        )
+        if bookmark.created_at is not None:
+            record.created_at = bookmark.created_at
+            record.updated_at = bookmark.created_at
         with self.session() as session:
             session.add(record)
             try:
@@ -135,15 +141,25 @@ class BookmarkRepository:
                 result.close()
 
     def list(
-        self, *, query: str | None = None, limit: int = 100, offset: int = 0
+        self,
+        *,
+        query: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+        sort: BookmarkSort | None = None,
     ) -> list[BookmarkRead]:
-        """List bookmarks, with an optional text query."""
-        statement = (
-            select(BookmarkRecord)
-            .order_by(col(BookmarkRecord.id))
-            .offset(offset)
-            .limit(limit)
-        )
+        """List bookmarks, with an optional text query and sort order."""
+        statement = select(BookmarkRecord).offset(offset).limit(limit)
+        if sort is BookmarkSort.NEWEST:
+            statement = statement.order_by(
+                col(BookmarkRecord.created_at).desc(), col(BookmarkRecord.id).asc()
+            )
+        elif sort is BookmarkSort.OLDEST:
+            statement = statement.order_by(
+                col(BookmarkRecord.created_at).asc(), col(BookmarkRecord.id).asc()
+            )
+        else:
+            statement = statement.order_by(col(BookmarkRecord.id).asc())
         if query:
             statement = statement.where(
                 col(BookmarkRecord.title).contains(query)

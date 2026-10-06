@@ -212,6 +212,41 @@ def test_api_paginates_filtered_bookmarks(tmp_path: Path) -> None:
     assert len(response.json()["items"]) == 1
 
 
+def test_api_lists_bookmarks_in_save_time_order(tmp_path: Path) -> None:
+    """Given stored save times, the sort parameter orders the bookmark list."""
+    client = _client(tmp_path)
+    for title, saved in [
+        ("New", "2020-01-15T00:00:00Z"),
+        ("Old", "2015-06-30T00:00:00Z"),
+    ]:
+        created = client.post(
+            f"{_API_PREFIX}/bookmarks",
+            headers=_HEADERS,
+            json={
+                "url": f"https://{title.lower()}.example",
+                "title": title,
+                "created_at": saved,
+            },
+        )
+        assert created.status_code == 201
+
+    newest = client.get(
+        f"{_API_PREFIX}/bookmarks", headers=_HEADERS, params={"sort": "newest"}
+    )
+    oldest = client.get(
+        f"{_API_PREFIX}/bookmarks", headers=_HEADERS, params={"sort": "oldest"}
+    )
+    invalid = client.get(
+        f"{_API_PREFIX}/bookmarks", headers=_HEADERS, params={"sort": "random"}
+    )
+
+    assert newest.status_code == 200
+    assert [item["title"] for item in newest.json()["items"]] == ["New", "Old"]
+    assert oldest.status_code == 200
+    assert [item["title"] for item in oldest.json()["items"]] == ["Old", "New"]
+    assert invalid.status_code == 422
+
+
 def test_api_rejects_duplicate_normalized_url(tmp_path: Path) -> None:
     """Given an existing normalized URL, create and update return HTTP 409."""
     client = _client(tmp_path)

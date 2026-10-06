@@ -9,6 +9,7 @@ import {
   listBookmarks,
   updateBookmark,
   type Bookmark,
+  type BookmarkSort,
 } from "./api/client";
 
 const DEFAULT_ACCENT_COLOR = "#0d684d";
@@ -35,6 +36,7 @@ interface BrowserSettings {
   accentColor: string;
   defaultView: ViewMode;
   pageSize: PageSize;
+  sortOrder: BookmarkSort;
 }
 
 interface NotificationEvent {
@@ -64,6 +66,7 @@ function parseBrowserSettings(value: unknown): BrowserSettings | null {
     accentColor,
     defaultView: candidate.defaultView,
     pageSize: candidate.pageSize as PageSize,
+    sortOrder: candidate.sortOrder === "oldest" ? "oldest" : "newest",
   };
 }
 
@@ -79,7 +82,7 @@ function loadBrowserSettings(): BrowserSettings {
   } catch {
     // Use defaults when browser-local storage is unavailable or malformed.
   }
-  return { accentColor: DEFAULT_ACCENT_COLOR, defaultView: "list", pageSize: 10 };
+  return { accentColor: DEFAULT_ACCENT_COLOR, defaultView: "list", pageSize: 10, sortOrder: "newest" };
 }
 
 function applyAccentColor(accentColor: string): void {
@@ -310,6 +313,13 @@ function setViewMode(mode: ViewMode): void {
   persistSettings();
 }
 
+function setSortOrder(order: BookmarkSort): void {
+  settings.sortOrder = order;
+  offset.value = 0;
+  persistSettings();
+  void loadBookmarks();
+}
+
 function markAllEventsRead(): void {
   for (const event of notificationEvents.value) {
     event.unread = false;
@@ -333,7 +343,7 @@ async function loadBookmarks(): Promise<void> {
     const loaded: Bookmark[] = [];
     let available = 0;
     do {
-      const page = await listBookmarks(query.value, FETCH_SIZE, loaded.length);
+      const page = await listBookmarks(query.value, FETCH_SIZE, loaded.length, settings.sortOrder);
       loaded.push(...page.items);
       available = page.total;
       if (page.items.length === 0) {
@@ -973,6 +983,23 @@ onBeforeUnmount(() => {
                 :aria-pressed="viewMode === 'gallery'"
                 @click="setViewMode('gallery')"
               >Gallery</button>
+            </div>
+          </div>
+          <div class="view-picker" aria-label="Collection sort order">
+            <p class="sidebar-heading">Sort</p>
+            <div class="view-options">
+              <button
+                type="button"
+                aria-label="Sort newest first"
+                :aria-pressed="settings.sortOrder === 'newest'"
+                @click="setSortOrder('newest')"
+              >Newest</button>
+              <button
+                type="button"
+                aria-label="Sort oldest first"
+                :aria-pressed="settings.sortOrder === 'oldest'"
+                @click="setSortOrder('oldest')"
+              >Oldest</button>
             </div>
           </div>
         </aside>

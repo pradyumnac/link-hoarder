@@ -47,3 +47,8 @@ Select **Import bookmarks**.
 
 The notification panel shows import warnings and completion events.
 Select the close icon on an alert, notice, or dialog to dismiss it.
+
+## Sort bookmarks
+
+Select **Newest** or **Oldest** in the collection sidebar to order bookmarks
+by original save time. The choice persists in browser settings.

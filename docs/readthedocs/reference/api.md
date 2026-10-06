@@ -18,6 +18,9 @@ Resource routes use the `/api/v1` prefix. The `/health` route is not versioned.
 | `POST` | `/api/v1/imports/bookmarks-json` | Import a bookmark JSON export. |
 
 The list response contains `items`, `total`, `limit`, and `offset` fields.
+The list accepts `query`, `limit`, `offset`, and `sort` parameters.
+The `sort` parameter accepts `newest` or `oldest` and orders by original save
+time. Imports preserve the save time from the source profile or export.
 Create and update operations return HTTP 409 when a normalized URL already exists.
 Imports skip an existing normalized URL and increment the `skipped` count.
 The HTML import response includes structured warnings for invalid entries, unreadable

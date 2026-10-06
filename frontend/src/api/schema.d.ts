@@ -152,6 +152,8 @@ export interface components {
          * @description Bookmark creation input.
          */
         BookmarkCreate: {
+            /** Created At */
+            created_at?: string | null;
             /** Folder */
             folder?: string | null;
             /** @default manual */
@@ -237,6 +239,12 @@ export interface components {
             /** Url */
             url: string;
         };
+        /**
+         * BookmarkSort
+         * @description Bookmark list sort order by original save time.
+         * @enum {string}
+         */
+        BookmarkSort: "newest" | "oldest";
         /**
          * BookmarkSource
          * @description Bookmark origin.
@@ -370,6 +378,7 @@ export interface operations {
                 query?: string | null;
                 limit?: number;
                 offset?: number;
+                sort?: components["schemas"]["BookmarkSort"] | null;
             };
             header?: never;
             path?: never;

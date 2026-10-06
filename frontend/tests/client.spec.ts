@@ -89,4 +89,32 @@ describe("API client", () => {
 
     await expect(listBookmarks("", 10, 0)).rejects.toThrow("Invalid key");
   });
+
+  it("sends the sort order through the versioned endpoint", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ items: [], limit: 10, offset: 0, total: 0 })),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await listBookmarks("", 10, 0, "oldest");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/bookmarks?limit=10&offset=0&sort=oldest",
+      undefined,
+    );
+  });
+
+  it("omits the sort order when no sort applies", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ items: [], limit: 10, offset: 0, total: 0 })),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await listBookmarks("", 10, 0);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/bookmarks?limit=10&offset=0",
+      undefined,
+    );
+  });
 });
