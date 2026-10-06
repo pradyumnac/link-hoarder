@@ -3,10 +3,10 @@ FROM node:24-slim
 ENV NODE_ENV=production
 WORKDIR /srv/preview
 
-COPY package.json package-lock.json ./
+COPY stack/preview/package.json stack/preview/package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 
-COPY server.js ./
+COPY stack/preview/server.js ./
 
 USER node
 EXPOSE 3001
