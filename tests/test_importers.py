@@ -24,6 +24,11 @@ from link_hoarder.core.repository import BookmarkRepository, BookmarkStorageErro
     [
         (Browser.CHROME, "LOCALAPPDATA", "Google/Chrome/User Data/Default/Bookmarks"),
         (
+            Browser.CHROME,
+            "LOCALAPPDATA",
+            "Google/Chrome/User Data/Default/AccountBookmarks",
+        ),
+        (
             Browser.BRAVE,
             "LOCALAPPDATA",
             "BraveSoftware/Brave-Browser/User Data/Default/Bookmarks",
@@ -73,6 +78,38 @@ def test_discover_linux_profiles(
     profile.touch()
 
     assert profile.resolve() in discover_profiles(browser)
+
+
+def test_discover_chromium_account_bookmarks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Given account storage, discovery finds Chromium AccountBookmarks."""
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
+    monkeypatch.delenv("LOCALAPPDATA", raising=False)
+    monkeypatch.delenv("APPDATA", raising=False)
+    profile = tmp_path / ".config/google-chrome/Default/AccountBookmarks"
+    profile.parent.mkdir(parents=True)
+    profile.touch()
+
+    assert profile.resolve() in discover_profiles(Browser.CHROME)
+
+
+def test_discover_chromium_both_bookmark_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Given local and account files, discovery returns both files."""
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
+    monkeypatch.delenv("LOCALAPPDATA", raising=False)
+    monkeypatch.delenv("APPDATA", raising=False)
+    local = tmp_path / ".config/google-chrome/Default/Bookmarks"
+    account = tmp_path / ".config/google-chrome/Default/AccountBookmarks"
+    local.parent.mkdir(parents=True)
+    local.touch()
+    account.touch()
+
+    assert discover_profiles(Browser.CHROME) == sorted(
+        [local.resolve(), account.resolve()]
+    )
 
 
 @pytest.mark.parametrize(

@@ -391,7 +391,7 @@ def import_browser(
             file_okay=True,
             dir_okay=False,
             readable=True,
-            help="Bookmarks or places.sqlite file. Omit to discover profiles.",
+            help="Bookmarks, AccountBookmarks, or places.sqlite file. Omit to discover profiles.",
         ),
     ] = None,
 ) -> None:

@@ -172,11 +172,16 @@ def discover_profiles(browser: Browser) -> list[Path]:
         ],
     }
     firefox_family = {Browser.FIREFOX, Browser.ZEN}
-    filename = "places.sqlite" if browser in firefox_family else "Bookmarks"
+    filenames = (
+        ("places.sqlite",)
+        if browser in firefox_family
+        else ("Bookmarks", "AccountBookmarks")
+    )
     found = {
         path.resolve()
         for root in roots[browser]
         if root.exists()
+        for filename in filenames
         for path in root.glob(f"*/{filename}")
         if path.is_file()
     }

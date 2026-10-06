@@ -19,7 +19,8 @@ The command checks the standard Windows and Linux profile directories.
 
 ## Select one profile
 
-Pass a Brave or Chromium `Bookmarks` file.
+Pass a Brave or Chromium `Bookmarks` or `AccountBookmarks` file.
+Signed-in Chrome stores live bookmarks in `AccountBookmarks`.
 Pass a Firefox or Zen `places.sqlite` file.
 
 ```console

@@ -124,6 +124,7 @@ Pass an explicit native profile file when automatic discovery is not available:
 
 ```console
 link-hoarder import-browser brave --profile /path/to/Brave-Browser/Default/Bookmarks
+link-hoarder import-browser chrome --profile /path/to/Default/AccountBookmarks
 link-hoarder import-browser zen --profile /path/to/places.sqlite
 ```
 
