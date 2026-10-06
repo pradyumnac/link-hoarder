@@ -1478,3 +1478,63 @@ def test_initialize_migrates_preview_text_column(tmp_path: Path) -> None:
             row[1] for row in connection.execute("PRAGMA table_info(bookmark_metadata)")
         }
     assert "preview_text" in columns
+
+
+class NoArticleFetcher:
+    """Return preview text without article text."""
+
+    def fetch(self, url: str) -> FetchedMetadata:
+        """Return fixed preview fields with no article body."""
+        del url
+        return FetchedMetadata(title="No Article Title")
+
+
+def test_incomplete_preview_row_needs_one_more_refresh(
+    repository: BookmarkRepository, tmp_path: Path
+) -> None:
+    """Given a fresh row without excerpt text, the sweeper requeues it once."""
+    service = BookmarkMetadataService(
+        repository,
+        tmp_path / "cache",
+        fetcher=NoArticleFetcher(),
+        enabled=False,
+    )
+    bookmark = repository.create(
+        BookmarkCreate(url="https://example.com/no-article", title="Example")
+    )
+    service.refresh(bookmark)
+    cached = repository.get_metadata(bookmark.id)
+    assert cached is not None
+    assert cached.preview_text is None
+
+    assert service._needs_refresh(bookmark, cached) is True
+
+    service._fetcher = PreviewFetcher()
+    service.refresh(bookmark)
+    refreshed = repository.get_metadata(bookmark.id)
+    assert refreshed is not None
+    assert refreshed.preview_text is not None
+    assert service._needs_refresh(bookmark, refreshed) is False
+    service.close()
+
+
+def test_backed_off_row_without_excerpt_stays_backed_off(
+    repository: BookmarkRepository, tmp_path: Path
+) -> None:
+    """Given a backed-off row without excerpt text, the sweeper leaves it alone."""
+    service = BookmarkMetadataService(
+        repository,
+        tmp_path / "cache",
+        fetcher=FailedFetcher(),
+        enabled=False,
+    )
+    bookmark = repository.create(
+        BookmarkCreate(url="https://example.com/unreachable", title="Example")
+    )
+    service.refresh(bookmark)
+    cached = repository.get_metadata(bookmark.id)
+    assert cached is not None
+    assert cached.preview_text is None
+
+    assert service._needs_refresh(bookmark, cached) is False
+    service.close()

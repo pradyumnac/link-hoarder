@@ -977,6 +977,7 @@ class BookmarkMetadataService:
         return (
             cached is None
             or cached.source_url != bookmark.url
+            or (cached.status is MetadataStatus.READY and cached.preview_text is None)
             or _as_utc(cached.retry_after) <= datetime.now(UTC)
         )
 
