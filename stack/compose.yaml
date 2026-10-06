@@ -11,6 +11,8 @@ services:
       LINK_HOARDER_LOG_LEVEL: ${LINK_HOARDER_LOG_LEVEL:-INFO}
       LINK_HOARDER_METADATA_CACHE_PATH: /data/metadata-cache
       LINK_HOARDER_METADATA_REFRESH_ENABLED: ${LINK_HOARDER_METADATA_REFRESH_ENABLED:-true}
+      LINK_HOARDER_PREVIEW_PROVIDER: ${LINK_HOARDER_PREVIEW_PROVIDER:-python}
+      LINK_HOARDER_PREVIEW_SERVICE_URL: http://preview:3001
     volumes:
       - link-hoarder-data:/data
       - link-hoarder-secrets:/run/link-hoarder
@@ -27,6 +29,21 @@ services:
       timeout: 3s
       retries: 5
       start_period: 5s
+
+  preview:
+    build:
+      context: ..
+      dockerfile: stack/preview/Dockerfile
+    image: link-hoarder-preview:local
+    init: true
+    stop_grace_period: 10s
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/health').then(r=>{if(!r.ok)process.exit(1)})"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   frontend:
     build:

@@ -31,7 +31,9 @@ from link_hoarder.core.logging import configure_logging
 from link_hoarder.core.metadata import (
     BookmarkAssetAvailability,
     BookmarkMetadataService,
+    LinkPreviewFetcher,
     MetadataFetcher,
+    SecureMetadataFetcher,
     generated_domain_icon,
 )
 from link_hoarder.core.models import (
@@ -46,6 +48,7 @@ from link_hoarder.core.models import (
     ImportWarning,
     ImportWarningCode,
     JsonImportResult,
+    PreviewProvider,
 )
 from link_hoarder.core.repository import BookmarkRepository, DuplicateBookmarkError
 
@@ -69,6 +72,13 @@ class ErrorDetail(BaseModel):
     detail: str
 
 
+def _default_metadata_fetcher(current: Settings) -> MetadataFetcher:
+    """Select the metadata fetcher from the configured preview provider."""
+    if current.preview_provider is PreviewProvider.LINK_PREVIEW_JS:
+        return LinkPreviewFetcher(current.preview_service_url)
+    return SecureMetadataFetcher()
+
+
 def create_app(
     settings: Settings | None = None,
     metadata_fetcher: MetadataFetcher | None = None,
@@ -80,10 +90,11 @@ def create_app(
         raise RuntimeError("LINK_HOARDER_API_KEY is required.")
     repository = BookmarkRepository(current.database_url)
     repository.initialize()
+    fetcher = metadata_fetcher or _default_metadata_fetcher(current)
     metadata = BookmarkMetadataService(
         repository,
         current.metadata_cache_path,
-        fetcher=metadata_fetcher,
+        fetcher=fetcher,
         enabled=current.metadata_refresh_enabled,
     )
     expected_key = current.api_key.get_secret_value()

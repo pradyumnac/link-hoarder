@@ -66,13 +66,17 @@ api-availability-favicon (no favicon filesystem check):
   a favicon filename, even when a favicon is cached.
 """
 
+import http.client
+import json
 import socket
 import threading
 import time
+import urllib.error
 from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime, timedelta
 from io import BytesIO
 from pathlib import Path
+from typing import Self
 from urllib.parse import SplitResult, urlsplit
 
 import pytest
@@ -84,6 +88,7 @@ from link_hoarder.core.backend import BookmarkStorageError
 from link_hoarder.core.metadata import (
     BookmarkMetadataService,
     FetchedMetadata,
+    LinkPreviewFetcher,
     MetadataBlockedError,
     MetadataFetchError,
     RemoteResponse,
@@ -1294,3 +1299,112 @@ def test_metadata_service_stores_preview_text(
     assert cached.preview_description == "Preview description."
     assert cached.preview_site == "Example"
     service.close()
+
+
+class _SidecarResponse:
+    """Minimal urlopen context manager returning canned bytes."""
+
+    def __init__(self, payload: bytes, status: int = 200) -> None:
+        self._payload = payload
+        self.status = status
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        return None
+
+    def read(self) -> bytes:
+        """Return the canned response body."""
+        return self._payload
+
+
+def _sidecar_payload() -> bytes:
+    """Return a canned link-preview-js sidecar response body."""
+    return json.dumps(
+        {
+            "url": "https://example.com/article",
+            "title": "  Sidecar Title  ",
+            "description": "Sidecar description.",
+            "site_name": "Example",
+            "images": ["https://img.example/hero.png"],
+            "favicons": ["https://example.com/icon.png"],
+        }
+    ).encode("utf-8")
+
+
+def test_link_preview_fetcher_maps_sidecar_response(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Given a sidecar preview, the fetcher maps text and downloads images."""
+    seen: list[str] = []
+
+    def fake_image(
+        self: LinkPreviewFetcher, url: str, **kwargs: object
+    ) -> bytes | None:
+        seen.append(url)
+        return _png()
+
+    monkeypatch.setattr(
+        "urllib.request.urlopen",
+        lambda request, timeout=None: _SidecarResponse(_sidecar_payload()),
+    )
+    monkeypatch.setattr(LinkPreviewFetcher, "_fetch_image", fake_image)
+
+    fetched = LinkPreviewFetcher("http://127.0.0.1:3001").fetch(
+        "https://example.com/article"
+    )
+
+    assert fetched.title == "Sidecar Title"
+    assert fetched.description == "Sidecar description."
+    assert fetched.site_name == "Example"
+    assert fetched.thumbnail is not None
+    assert seen[0] == "https://img.example/hero.png"
+    assert "https://example.com/icon.png" in seen
+
+
+def test_link_preview_fetcher_rejects_sidecar_http_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Given a sidecar HTTP error, the fetcher raises a fetch error."""
+
+    def failing(request: object, timeout: object = None) -> _SidecarResponse:
+        raise urllib.error.HTTPError(
+            "http://127.0.0.1:3001/preview",
+            422,
+            "Unprocessable",
+            http.client.HTTPMessage(),
+            None,
+        )
+
+    monkeypatch.setattr("urllib.request.urlopen", failing)
+
+    with pytest.raises(MetadataFetchError, match="HTTP 422"):
+        LinkPreviewFetcher("http://127.0.0.1:3001").fetch("https://example.com/x")
+
+
+def test_link_preview_fetcher_rejects_unreachable_sidecar(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Given an unreachable sidecar, the fetcher raises a fetch error."""
+
+    def failing(request: object, timeout: object = None) -> _SidecarResponse:
+        raise OSError("connection refused")
+
+    monkeypatch.setattr("urllib.request.urlopen", failing)
+
+    with pytest.raises(MetadataFetchError, match="could not be reached"):
+        LinkPreviewFetcher("http://127.0.0.1:3001").fetch("https://example.com/x")
+
+
+def test_link_preview_fetcher_rejects_invalid_sidecar_payload(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Given a malformed sidecar payload, the fetcher raises a fetch error."""
+    monkeypatch.setattr(
+        "urllib.request.urlopen",
+        lambda request, timeout=None: _SidecarResponse(b'{"images": "nope"}'),
+    )
+
+    with pytest.raises(MetadataFetchError, match="invalid payload"):
+        LinkPreviewFetcher("http://127.0.0.1:3001").fetch("https://example.com/x")

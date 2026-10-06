@@ -1,0 +1,16 @@
+{
+  "name": "link-hoarder-preview",
+  "private": true,
+  "version": "0.1.0",
+  "description": "link-preview-js sidecar for link-hoarder page previews",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "link-preview-js": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

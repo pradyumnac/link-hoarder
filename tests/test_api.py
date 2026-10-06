@@ -11,12 +11,22 @@ from fastapi.testclient import TestClient
 from PIL import Image
 from pydantic import SecretStr, ValidationError
 
-from link_hoarder.api.app import create_app
+from link_hoarder.api.app import _default_metadata_fetcher, create_app
 from link_hoarder.api.openapi import contract_json
 from link_hoarder.core.config import Settings
 from link_hoarder.core.exporters import export_bookmarks
-from link_hoarder.core.metadata import BookmarkMetadataService, FetchedMetadata
-from link_hoarder.core.models import BookmarkCreate, BookmarkRead, BookmarkSource
+from link_hoarder.core.metadata import (
+    BookmarkMetadataService,
+    FetchedMetadata,
+    LinkPreviewFetcher,
+    SecureMetadataFetcher,
+)
+from link_hoarder.core.models import (
+    BookmarkCreate,
+    BookmarkRead,
+    BookmarkSource,
+    PreviewProvider,
+)
 from link_hoarder.core.repository import BookmarkRepository
 
 _API_PREFIX = "/api/v1"
@@ -64,6 +74,18 @@ def test_settings_reject_short_api_key() -> None:
     """Given a short API key, settings reject insecure authentication data."""
     with pytest.raises(ValidationError):
         Settings(api_key=SecretStr("short-key"))
+
+
+def test_default_fetcher_selects_configured_preview_provider() -> None:
+    """Given a sidecar provider, app wiring selects the link preview fetcher."""
+    sidecar = Settings(
+        preview_provider=PreviewProvider.LINK_PREVIEW_JS,
+        preview_service_url="http://preview:3001",
+    )
+    fetcher = _default_metadata_fetcher(sidecar)
+
+    assert isinstance(fetcher, LinkPreviewFetcher)
+    assert isinstance(_default_metadata_fetcher(Settings()), SecureMetadataFetcher)
 
 
 def test_api_closes_repository_during_shutdown(

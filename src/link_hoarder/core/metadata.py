@@ -3,10 +3,13 @@
 import html
 import http.client
 import ipaddress
+import json
 import socket
 import ssl
 import threading
 import time
+import urllib.error
+import urllib.request
 from collections.abc import Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -15,11 +18,11 @@ from html.parser import HTMLParser
 from io import BytesIO
 from pathlib import Path
 from typing import Protocol
-from urllib.parse import SplitResult, urljoin, urlsplit, urlunsplit
+from urllib.parse import SplitResult, quote, urljoin, urlsplit, urlunsplit
 
 import structlog
 from PIL import Image, ImageOps, UnidentifiedImageError
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from link_hoarder.core.models import (
     BookmarkMetadataRecord,
@@ -297,6 +300,86 @@ class SecureMetadataFetcher:
                 final_url=current,
             )
         raise MetadataBlockedError("The redirect limit was exceeded.")
+
+
+class _SidecarPreview(BaseModel):
+    """Validated link-preview-js sidecar response."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    url: str = ""
+    title: str | None = None
+    description: str | None = None
+    site_name: str | None = None
+    images: list[str] = []
+    favicons: list[str] = []
+
+
+class LinkPreviewFetcher(SecureMetadataFetcher):
+    """Fetch metadata through the link-preview-js sidecar service."""
+
+    def __init__(self, service_url: str, timeout_seconds: float = 10.0) -> None:
+        """Remember the sidecar base URL and the request timeout."""
+        super().__init__()
+        self._service_url = service_url.rstrip("/")
+        self._timeout_seconds = timeout_seconds
+
+    def fetch(self, url: str) -> FetchedMetadata:
+        """Fetch one preview from the sidecar and its presentation images."""
+        preview = self._request_preview(url)
+        thumbnail: bytes | None = None
+        for candidate in dict.fromkeys(preview.images):
+            thumbnail = self._fetch_image(candidate, maximum_size=(1200, 630))
+            if thumbnail is not None:
+                break
+        favicon = self._first_available_image(
+            [*preview.favicons, urljoin(url, "/favicon.ico")],
+            maximum_size=(128, 128),
+        )
+        return FetchedMetadata(
+            favicon=favicon,
+            thumbnail=thumbnail,
+            title=_clean_preview_text(preview.title, _MAX_PREVIEW_TITLE_CHARS),
+            description=_clean_preview_text(
+                preview.description, _MAX_PREVIEW_DESCRIPTION_CHARS
+            ),
+            site_name=_clean_preview_text(preview.site_name, _MAX_PREVIEW_SITE_CHARS),
+        )
+
+    def _request_preview(self, url: str) -> _SidecarPreview:
+        """Request one sidecar preview or raise a fetch error."""
+        endpoint = f"{self._service_url}/preview?url={quote(url, safe='')}"
+        request = urllib.request.Request(
+            endpoint, headers={"Accept": "application/json"}
+        )
+        try:
+            with urllib.request.urlopen(
+                request, timeout=self._timeout_seconds
+            ) as http_response:
+                status = http_response.status
+                body = http_response.read()
+        except urllib.error.HTTPError as error:
+            raise MetadataFetchError(
+                f"The preview service returned HTTP {error.code}."
+            ) from error
+        except (OSError, TimeoutError) as error:
+            raise MetadataFetchError(
+                "The preview service could not be reached."
+            ) from error
+        if status < 200 or status >= 300:
+            raise MetadataFetchError(f"The preview service returned HTTP {status}.")
+        try:
+            payload = json.loads(body.decode("utf-8"))
+        except (UnicodeDecodeError, ValueError) as error:
+            raise MetadataFetchError(
+                "The preview service returned an invalid payload."
+            ) from error
+        try:
+            return _SidecarPreview.model_validate(payload)
+        except ValidationError as error:
+            raise MetadataFetchError(
+                "The preview service returned an invalid payload."
+            ) from error
 
 
 def _ordered_icon_candidates(hrefs: Sequence[str]) -> list[str]:
