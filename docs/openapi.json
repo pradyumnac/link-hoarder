@@ -417,6 +417,48 @@
         "title": "ImportWarningCode",
         "type": "string"
       },
+      "JsonImportResult": {
+        "description": "Bookmark JSON export import result.",
+        "properties": {
+          "discovered": {
+            "title": "Discovered",
+            "type": "integer"
+          },
+          "format": {
+            "const": "link_hoarder_json",
+            "default": "link_hoarder_json",
+            "title": "Format",
+            "type": "string"
+          },
+          "imported": {
+            "title": "Imported",
+            "type": "integer"
+          },
+          "profiles": {
+            "title": "Profiles",
+            "type": "integer"
+          },
+          "skipped": {
+            "title": "Skipped",
+            "type": "integer"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/ImportWarning"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "profiles",
+          "discovered",
+          "imported",
+          "skipped"
+        ],
+        "title": "JsonImportResult",
+        "type": "object"
+      },
       "ValidationError": {
         "properties": {
           "ctx": {
@@ -936,6 +978,58 @@
           }
         ],
         "summary": "Import Bookmarks File",
+        "tags": [
+          "imports"
+        ]
+      }
+    },
+    "/api/v1/imports/bookmarks-json": {
+      "post": {
+        "operationId": "import_bookmarks_json_api_v1_imports_bookmarks_json_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "items": {
+                  "$ref": "#/components/schemas/BookmarkCreate"
+                },
+                "maxItems": 50000,
+                "minItems": 1,
+                "title": "Bookmarks",
+                "type": "array"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JsonImportResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "summary": "Import Bookmarks Json",
         "tags": [
           "imports"
         ]

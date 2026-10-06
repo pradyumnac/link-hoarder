@@ -194,3 +194,9 @@ class HtmlImportResult(ImportSummary):
     """Bookmark HTML export import result."""
 
     format: Literal["netscape_html"] = "netscape_html"
+
+
+class JsonImportResult(ImportSummary):
+    """Bookmark JSON export import result."""
+
+    format: Literal["link_hoarder_json"] = "link_hoarder_json"

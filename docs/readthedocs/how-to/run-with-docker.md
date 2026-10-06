@@ -25,6 +25,16 @@ Browser JavaScript cannot read the key.
 Set `LINK_HOARDER_API_KEY` in `stack/.env` only when you must supply your own key.
 The data volume stores the SQLite database.
 
+Copy bookmarks from the host CLI database into the stack:
+
+```console
+mise run stack-seed
+```
+
+The command exports the host CLI database and sends it to the bulk JSON import.
+The command does nothing when the host has no CLI database.
+Repeat the command to import new bookmarks. Existing bookmarks are skipped.
+
 Run the stack in the foreground during development:
 
 ```console

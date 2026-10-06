@@ -109,6 +109,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/imports/bookmarks-json": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Import Bookmarks Json */
+        post: operations["import_bookmarks_json_api_v1_imports_bookmarks_json_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -303,6 +320,28 @@ export interface components {
          * @enum {string}
          */
         ImportWarningCode: "bookmark_invalid" | "bookmark_duplicate" | "bookmark_store_failed" | "profile_invalid" | "profile_unreadable";
+        /**
+         * JsonImportResult
+         * @description Bookmark JSON export import result.
+         */
+        JsonImportResult: {
+            /** Discovered */
+            discovered: number;
+            /**
+             * Format
+             * @default link_hoarder_json
+             * @constant
+             */
+            format: "link_hoarder_json";
+            /** Imported */
+            imported: number;
+            /** Profiles */
+            profiles: number;
+            /** Skipped */
+            skipped: number;
+            /** Warnings */
+            warnings?: components["schemas"]["ImportWarning"][];
+        };
         /** ValidationError */
         ValidationError: {
             /** Context */
@@ -617,6 +656,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HtmlImportResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_bookmarks_json_api_v1_imports_bookmarks_json_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BookmarkCreate"][];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JsonImportResult"];
                 };
             };
             /** @description Validation Error */

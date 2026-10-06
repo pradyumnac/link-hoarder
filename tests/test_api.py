@@ -1,6 +1,8 @@
 """FastAPI integration tests."""
 
+import json
 import time
+from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import Path
 
@@ -12,8 +14,9 @@ from pydantic import SecretStr, ValidationError
 from link_hoarder.api.app import create_app
 from link_hoarder.api.openapi import contract_json
 from link_hoarder.core.config import Settings
+from link_hoarder.core.exporters import export_bookmarks
 from link_hoarder.core.metadata import BookmarkMetadataService, FetchedMetadata
-from link_hoarder.core.models import BookmarkCreate
+from link_hoarder.core.models import BookmarkCreate, BookmarkRead, BookmarkSource
 from link_hoarder.core.repository import BookmarkRepository
 
 _API_PREFIX = "/api/v1"
@@ -306,6 +309,113 @@ def test_api_rejects_oversized_profile(tmp_path: Path) -> None:
         f"{_API_PREFIX}/imports/bookmarks-file",
         headers={**_HEADERS, "Content-Type": "text/html"},
         content=b"x" * (16 * 1024 * 1024 + 1),
+    )
+
+    assert response.status_code == 422
+
+
+def test_api_imports_uploaded_bookmark_json(tmp_path: Path) -> None:
+    """Given an uploaded JSON export, the API imports its valid bookmarks."""
+    payload = [
+        {"url": "https://example.com/one", "title": "One"},
+        {
+            "url": "https://example.com/two",
+            "title": "Two",
+            "folder": "docs",
+            "tags": ["reference"],
+            "source": "html",
+            "id": 99,
+            "created_at": "2026-01-01T00:00:00Z",
+            "updated_at": "2026-01-02T00:00:00Z",
+        },
+    ]
+
+    response = _client(tmp_path).post(
+        f"{_API_PREFIX}/imports/bookmarks-json",
+        headers=_HEADERS,
+        json=payload,
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["format"] == "link_hoarder_json"
+    assert body["profiles"] == 1
+    assert body["discovered"] == 2
+    assert body["imported"] == 2
+    assert body["skipped"] == 0
+
+
+def test_api_skips_duplicate_uploaded_bookmark_json(tmp_path: Path) -> None:
+    """Given a repeated JSON import, the API skips existing bookmarks."""
+    client = _client(tmp_path)
+    payload = [{"url": "https://example.com/dup", "title": "Dup"}]
+    first = client.post(
+        f"{_API_PREFIX}/imports/bookmarks-json",
+        headers=_HEADERS,
+        json=payload,
+    )
+    second = client.post(
+        f"{_API_PREFIX}/imports/bookmarks-json",
+        headers=_HEADERS,
+        json=payload,
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    body = second.json()
+    assert body["imported"] == 0
+    assert body["skipped"] == 1
+    assert body["warnings"][0]["code"] == "bookmark_duplicate"
+    assert body["warnings"][0]["profile"] == "bookmarks.json"
+
+
+def test_api_imports_cli_json_export_file(tmp_path: Path) -> None:
+    """Given a CLI JSON export file, its payload round-trips via the API."""
+    export = export_bookmarks(
+        [
+            BookmarkRead(
+                id=1,
+                url="https://example.com/exported",
+                title="Exported",
+                folder="cli",
+                tags=["seed"],
+                source=BookmarkSource.MANUAL,
+                created_at=datetime(2026, 1, 1, tzinfo=UTC),
+                updated_at=datetime(2026, 1, 1, tzinfo=UTC),
+            )
+        ],
+        tmp_path / "export",
+    )
+
+    payload = json.loads(export.json_path.read_text(encoding="utf-8"))
+    response = _client(tmp_path).post(
+        f"{_API_PREFIX}/imports/bookmarks-json",
+        headers=_HEADERS,
+        json=payload,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["imported"] == 1
+
+
+def test_api_rejects_invalid_uploaded_bookmark_json(tmp_path: Path) -> None:
+    """Given a JSON import with an invalid URL, the API rejects the request."""
+    response = _client(tmp_path).post(
+        f"{_API_PREFIX}/imports/bookmarks-json",
+        headers=_HEADERS,
+        json=[{"url": "not-a-url", "title": "Bad"}],
+    )
+
+    assert response.status_code == 422
+    assert "not-a-url" not in response.text
+
+
+def test_api_rejects_empty_uploaded_bookmark_json(tmp_path: Path) -> None:
+    """Given an empty JSON import, the API rejects the request."""
+    response = _client(tmp_path).post(
+        f"{_API_PREFIX}/imports/bookmarks-json",
+        headers=_HEADERS,
+        json=[],
     )
 
     assert response.status_code == 422

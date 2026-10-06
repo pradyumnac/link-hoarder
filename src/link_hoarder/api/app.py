@@ -41,12 +41,17 @@ from link_hoarder.core.models import (
     BookmarkRead,
     BookmarkUpdate,
     HtmlImportResult,
+    ImportWarning,
+    ImportWarningCode,
+    JsonImportResult,
 )
 from link_hoarder.core.repository import BookmarkRepository, DuplicateBookmarkError
 
 _API_KEY = APIKeyHeader(name="X-API-Key", auto_error=False)
 _API_PREFIX = "/api/v1"
 _MAX_PROFILE_BYTES = 16 * 1024 * 1024
+_MAX_JSON_ITEMS = 50_000
+_JSON_IMPORT_PROFILE = "bookmarks.json"
 _ASSET_CACHE_CONTROL = "private, max-age=3600, must-revalidate"
 
 
@@ -271,6 +276,59 @@ def create_app(
                 for warning in detail.result.warnings
             ]
             return detail.result.model_copy(update={"warnings": warnings})
+
+    @router.post("/imports/bookmarks-json", tags=["imports"])
+    def import_bookmarks_json(
+        bookmarks: Annotated[
+            list[BookmarkCreate],
+            Body(min_length=1, max_length=_MAX_JSON_ITEMS),
+        ],
+    ) -> JsonImportResult:
+        imported = 0
+        skipped = 0
+        warnings: list[ImportWarning] = []
+        created: list[BookmarkRead] = []
+        for bookmark in bookmarks:
+            if repository.find_by_url(bookmark.url) is not None:
+                skipped += 1
+                warnings.append(
+                    ImportWarning(
+                        code=ImportWarningCode.BOOKMARK_DUPLICATE,
+                        message=(
+                            f"The bookmark '{bookmark.title}' was skipped "
+                            "because it already exists."
+                        ),
+                        profile=_JSON_IMPORT_PROFILE,
+                    )
+                )
+                continue
+            try:
+                stored = repository.create(bookmark)
+            except DuplicateBookmarkError:
+                skipped += 1
+                warnings.append(
+                    ImportWarning(
+                        code=ImportWarningCode.BOOKMARK_DUPLICATE,
+                        message=(
+                            f"The bookmark '{bookmark.title}' was skipped "
+                            "because it already exists."
+                        ),
+                        profile=_JSON_IMPORT_PROFILE,
+                    )
+                )
+                continue
+            imported += 1
+            created.append(stored)
+        # An import is bulk backlog work. It must not consume the
+        # capacity reserved for bookmarks the user is looking at.
+        metadata.queue_backfill(created)
+        return JsonImportResult(
+            profiles=1,
+            discovered=len(bookmarks),
+            imported=imported,
+            skipped=skipped,
+            warnings=warnings,
+        )
 
     api.include_router(router)
     return api
