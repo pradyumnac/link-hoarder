@@ -147,9 +147,11 @@ h3 { margin: 0; font-size: 1.06rem; font-weight: 700; }
 .meta-row { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px; margin-top: 3px; }
 .bookmark-url { display: block; min-width: 0; max-width: 100%; overflow: hidden; color: var(--accent-link); font-size: 0.84rem; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
 code.bookmark-url { font-size: 0.77rem; }
-.folder { margin: 0; }
+.folder-eyebrow { overflow: hidden; margin-bottom: 2px; font-size: 0.68rem; text-overflow: ellipsis; white-space: nowrap; }
+.saved-at { color: #8a938c; font-size: 0.78rem; white-space: nowrap; }
+.saved-at::before { content: "·"; margin-right: 6px; color: #c3bfae; }
 .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-.tags span, .bookmarklet, .folder, .saved-at { padding: 4px 8px; border-radius: 999px; background: #ece9dc; color: #52635c; font-size: 0.7rem; font-weight: 750; white-space: nowrap; }
+.tags span, .bookmarklet { padding: 4px 8px; border-radius: 999px; background: #ece9dc; color: #52635c; font-size: 0.7rem; font-weight: 750; }
 .bookmarklet { color: #884129; background: #f6ded5; text-transform: uppercase; }
 .actions { display: flex; align-items: flex-start; gap: 4px; }
 @media (hover: hover) and (pointer: fine) {
