@@ -3,13 +3,11 @@
 import html
 import http.client
 import ipaddress
-import json
+import re
 import socket
 import ssl
 import threading
 import time
-import urllib.error
-import urllib.request
 from collections.abc import Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -18,11 +16,12 @@ from html.parser import HTMLParser
 from io import BytesIO
 from pathlib import Path
 from typing import Protocol
-from urllib.parse import SplitResult, quote, urljoin, urlsplit, urlunsplit
+from urllib.parse import SplitResult, urljoin, urlsplit, urlunsplit
 
 import structlog
+import trafilatura
 from PIL import Image, ImageOps, UnidentifiedImageError
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import BaseModel, ConfigDict
 
 from link_hoarder.core.models import (
     BookmarkMetadataRecord,
@@ -42,6 +41,20 @@ _REFRESH_AFTER = timedelta(days=7)
 _RETRY_AFTER_FAILURE = timedelta(hours=1)
 _MAX_RETRY_AFTER_FAILURE = timedelta(hours=24)
 _ALLOWED_IMAGE_FORMATS = frozenset({"GIF", "ICO", "JPEG", "PNG", "WEBP"})
+# A current desktop browser user agent. Some sites refuse metadata
+# requests from obvious bots, so the fetcher identifies as a browser.
+_BROWSER_USER_AGENT = (
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+)
+_MAX_PREVIEW_TEXT_CHARS = 2000
+# SVG favicons are served to browsers as inert images, never rasterized
+# here, so any active content disqualifies the file outright.
+_SVG_BLOCKED_PATTERNS = (
+    re.compile(r"<script[\s>]", re.IGNORECASE),
+    re.compile(r"\son[a-z]+\s*=", re.IGNORECASE),
+    re.compile(r"javascript\s*:", re.IGNORECASE),
+)
 _REDIRECT_STATUSES = frozenset({301, 302, 303, 307, 308})
 # Link relations that can name a site icon. A site often declares several,
 # and the first one is not always an image this application can decode.
@@ -107,9 +120,11 @@ class FetchedMetadata(BaseModel):
 
     favicon: bytes | None = None
     thumbnail: bytes | None = None
+    favicon_svg: bytes | None = None
     title: str | None = None
     description: str | None = None
     site_name: str | None = None
+    article_text: str | None = None
 
 
 _MAX_PREVIEW_TITLE_CHARS = 300
@@ -125,6 +140,38 @@ def _clean_preview_text(value: str | None, limit: int) -> str | None:
     if not cleaned:
         return None
     return cleaned[:limit]
+
+
+def _extract_article_text(html_body: str) -> str | None:
+    """Extract readable article text without navigation or advertising.
+
+    The extractor must never take down a refresh, so any failure falls
+    back to no excerpt and the head-level preview fields still store.
+    """
+    try:
+        extracted = trafilatura.extract(
+            html_body, include_comments=False, include_tables=False
+        )
+    except Exception as error:  # noqa: BLE001 - extraction is best effort
+        _LOGGER.warning(
+            "bookmark_metadata_article_extract_failed",
+            reason=error.__class__.__name__,
+        )
+        return None
+    return _clean_preview_text(extracted, _MAX_PREVIEW_TEXT_CHARS)
+
+
+def _sanitize_svg_icon(content: bytes) -> bytes | None:
+    """Accept an inert SVG icon, or reject active content outright."""
+    try:
+        text = content.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+    if "<svg" not in text.lower():
+        return None
+    if any(pattern.search(text) is not None for pattern in _SVG_BLOCKED_PATTERNS):
+        return None
+    return content
 
 
 class MetadataFetcher(Protocol):
@@ -212,7 +259,8 @@ class SecureMetadataFetcher:
         if "html" not in page.content_type.lower():
             raise MetadataFetchError("The bookmark did not return HTML.")
         parser = _HeadMetadataParser()
-        parser.feed(page.body.decode("utf-8", errors="replace"))
+        decoded_body = page.body.decode("utf-8", errors="replace")
+        parser.feed(decoded_body)
 
         candidates = [
             urljoin(page.final_url, candidate)
@@ -225,6 +273,9 @@ class SecureMetadataFetcher:
             else None
         )
         favicon = self._first_available_image(candidates, maximum_size=(128, 128))
+        favicon_svg = None
+        if favicon is None:
+            favicon_svg = self._first_available_svg(candidates)
         thumbnail = (
             self._fetch_image(thumbnail_url, maximum_size=(1200, 630))
             if thumbnail_url is not None
@@ -233,11 +284,13 @@ class SecureMetadataFetcher:
         return FetchedMetadata(
             favicon=favicon,
             thumbnail=thumbnail,
+            favicon_svg=favicon_svg,
             title=_clean_preview_text(parser.title, _MAX_PREVIEW_TITLE_CHARS),
             description=_clean_preview_text(
                 parser.description, _MAX_PREVIEW_DESCRIPTION_CHARS
             ),
             site_name=_clean_preview_text(parser.site_name, _MAX_PREVIEW_SITE_CHARS),
+            article_text=_extract_article_text(decoded_body),
         )
 
     def _first_available_image(
@@ -248,6 +301,26 @@ class SecureMetadataFetcher:
             image = self._fetch_image(candidate, maximum_size=maximum_size)
             if image is not None:
                 return image
+        return None
+
+    def _first_available_svg(self, urls: Sequence[str]) -> bytes | None:
+        """Return the first candidate icon that is inert SVG markup."""
+        for candidate in dict.fromkeys(urls):
+            try:
+                response = self._request(
+                    candidate,
+                    max_bytes=_MAX_IMAGE_BYTES,
+                    accept="image/svg+xml,image/*",
+                )
+            except MetadataFetchError as error:
+                _LOGGER.warning(
+                    "bookmark_metadata_image_fetch_failed",
+                    reason=error.__class__.__name__,
+                )
+                continue
+            sanitized = _sanitize_svg_icon(response.body)
+            if sanitized is not None:
+                return sanitized
         return None
 
     def _fetch_image(self, url: str, *, maximum_size: tuple[int, int]) -> bytes | None:
@@ -300,86 +373,6 @@ class SecureMetadataFetcher:
                 final_url=current,
             )
         raise MetadataBlockedError("The redirect limit was exceeded.")
-
-
-class _SidecarPreview(BaseModel):
-    """Validated link-preview-js sidecar response."""
-
-    model_config = ConfigDict(extra="ignore")
-
-    url: str = ""
-    title: str | None = None
-    description: str | None = None
-    site_name: str | None = None
-    images: list[str] = []
-    favicons: list[str] = []
-
-
-class LinkPreviewFetcher(SecureMetadataFetcher):
-    """Fetch metadata through the link-preview-js sidecar service."""
-
-    def __init__(self, service_url: str, timeout_seconds: float = 10.0) -> None:
-        """Remember the sidecar base URL and the request timeout."""
-        super().__init__()
-        self._service_url = service_url.rstrip("/")
-        self._timeout_seconds = timeout_seconds
-
-    def fetch(self, url: str) -> FetchedMetadata:
-        """Fetch one preview from the sidecar and its presentation images."""
-        preview = self._request_preview(url)
-        thumbnail: bytes | None = None
-        for candidate in dict.fromkeys(preview.images):
-            thumbnail = self._fetch_image(candidate, maximum_size=(1200, 630))
-            if thumbnail is not None:
-                break
-        favicon = self._first_available_image(
-            [*preview.favicons, urljoin(url, "/favicon.ico")],
-            maximum_size=(128, 128),
-        )
-        return FetchedMetadata(
-            favicon=favicon,
-            thumbnail=thumbnail,
-            title=_clean_preview_text(preview.title, _MAX_PREVIEW_TITLE_CHARS),
-            description=_clean_preview_text(
-                preview.description, _MAX_PREVIEW_DESCRIPTION_CHARS
-            ),
-            site_name=_clean_preview_text(preview.site_name, _MAX_PREVIEW_SITE_CHARS),
-        )
-
-    def _request_preview(self, url: str) -> _SidecarPreview:
-        """Request one sidecar preview or raise a fetch error."""
-        endpoint = f"{self._service_url}/preview?url={quote(url, safe='')}"
-        request = urllib.request.Request(
-            endpoint, headers={"Accept": "application/json"}
-        )
-        try:
-            with urllib.request.urlopen(
-                request, timeout=self._timeout_seconds
-            ) as http_response:
-                status = http_response.status
-                body = http_response.read()
-        except urllib.error.HTTPError as error:
-            raise MetadataFetchError(
-                f"The preview service returned HTTP {error.code}."
-            ) from error
-        except (OSError, TimeoutError) as error:
-            raise MetadataFetchError(
-                "The preview service could not be reached."
-            ) from error
-        if status < 200 or status >= 300:
-            raise MetadataFetchError(f"The preview service returned HTTP {status}.")
-        try:
-            payload = json.loads(body.decode("utf-8"))
-        except (UnicodeDecodeError, ValueError) as error:
-            raise MetadataFetchError(
-                "The preview service returned an invalid payload."
-            ) from error
-        try:
-            return _SidecarPreview.model_validate(payload)
-        except ValidationError as error:
-            raise MetadataFetchError(
-                "The preview service returned an invalid payload."
-            ) from error
 
 
 def _ordered_icon_candidates(hrefs: Sequence[str]) -> list[str]:
@@ -489,7 +482,7 @@ def _request_once(
             f"Accept: {accept}\r\n"
             "Accept-Encoding: identity\r\n"
             "Connection: close\r\n"
-            "User-Agent: Link-Hoarder-Metadata/1\r\n\r\n"
+            f"User-Agent: {_BROWSER_USER_AGENT}\r\n\r\n"
         )
         connection.sendall(request.encode("ascii"))
         response = http.client.HTTPResponse(connection)
@@ -784,6 +777,10 @@ class BookmarkMetadataService:
                 favicon_file = self._store_asset(
                     bookmark.id, "favicon", fetched.favicon
                 )
+                if favicon_file is None and fetched.favicon_svg is not None:
+                    favicon_file = self._store_asset(
+                        bookmark.id, "favicon", fetched.favicon_svg, suffix=".svg"
+                    )
                 thumbnail_file = self._store_asset(
                     bookmark.id, "thumbnail", fetched.thumbnail
                 )
@@ -797,6 +794,7 @@ class BookmarkMetadataService:
                         preview_title=fetched.title,
                         preview_description=fetched.description,
                         preview_site=fetched.site_name,
+                        preview_text=fetched.article_text,
                         refreshed_at=now,
                         retry_after=now + _REFRESH_AFTER,
                     )
@@ -826,7 +824,10 @@ class BookmarkMetadataService:
             if bookmark_id in self._active_generation:
                 self._active_generation[bookmark_id] += 1
             for kind in ("favicon", "thumbnail"):
-                (self._cache_path / f"{bookmark_id}-{kind}.png").unlink(missing_ok=True)
+                for suffix in (".png", ".svg"):
+                    (self._cache_path / f"{bookmark_id}-{kind}{suffix}").unlink(
+                        missing_ok=True
+                    )
 
     def asset_path(self, bookmark_id: int, kind: str) -> Path | None:
         """Return a verified cached asset path for one bookmark."""
@@ -1030,21 +1031,28 @@ class BookmarkMetadataService:
                     self._active_generation.pop(bookmark.id, None)
 
     def _store_asset(
-        self, bookmark_id: int, kind: str, content: bytes | None
+        self,
+        bookmark_id: int,
+        kind: str,
+        content: bytes | None,
+        *,
+        suffix: str = ".png",
     ) -> str | None:
-        filename = f"{bookmark_id}-{kind}.png"
+        filename = f"{bookmark_id}-{kind}{suffix}"
         path = self._cache_path / filename
         if content is None:
             # Removing a stale cache file is best effort. It must not stop
             # the caller from recording a failure and its retry backoff.
-            try:
-                path.unlink(missing_ok=True)
-            except OSError as error:
-                _LOGGER.warning(
-                    "bookmark_metadata_asset_not_removed",
-                    bookmark_id=bookmark_id,
-                    reason=error.__class__.__name__,
-                )
+            # A favicon can exist in either raster or vector form.
+            for stale in {path, path.with_suffix(".png"), path.with_suffix(".svg")}:
+                try:
+                    stale.unlink(missing_ok=True)
+                except OSError as error:
+                    _LOGGER.warning(
+                        "bookmark_metadata_asset_not_removed",
+                        bookmark_id=bookmark_id,
+                        reason=error.__class__.__name__,
+                    )
             return None
         temporary = path.with_suffix(".tmp")
         temporary.write_bytes(content)

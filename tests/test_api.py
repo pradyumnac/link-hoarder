@@ -11,21 +11,19 @@ from fastapi.testclient import TestClient
 from PIL import Image
 from pydantic import SecretStr, ValidationError
 
-from link_hoarder.api.app import _default_metadata_fetcher, create_app
+from link_hoarder.api.app import create_app
 from link_hoarder.api.openapi import contract_json
 from link_hoarder.core.config import Settings
 from link_hoarder.core.exporters import export_bookmarks
 from link_hoarder.core.metadata import (
     BookmarkMetadataService,
     FetchedMetadata,
-    LinkPreviewFetcher,
-    SecureMetadataFetcher,
+    MetadataFetchError,
 )
 from link_hoarder.core.models import (
     BookmarkCreate,
     BookmarkRead,
     BookmarkSource,
-    PreviewProvider,
 )
 from link_hoarder.core.repository import BookmarkRepository
 
@@ -52,7 +50,17 @@ class StaticMetadataFetcher:
             title="Static Title",
             description="Static description.",
             site_name="Static Site",
+            article_text="Static article excerpt.",
         )
+
+
+class FailingMetadataFetcher:
+    """Raise a fetch error without outbound network access."""
+
+    def fetch(self, url: str) -> FetchedMetadata:
+        """Fail every metadata fetch deterministically."""
+        del url
+        raise MetadataFetchError("The preview fetch failed.")
 
 
 def _client(tmp_path: Path) -> TestClient:
@@ -74,18 +82,6 @@ def test_settings_reject_short_api_key() -> None:
     """Given a short API key, settings reject insecure authentication data."""
     with pytest.raises(ValidationError):
         Settings(api_key=SecretStr("short-key"))
-
-
-def test_default_fetcher_selects_configured_preview_provider() -> None:
-    """Given a sidecar provider, app wiring selects the link preview fetcher."""
-    sidecar = Settings(
-        preview_provider=PreviewProvider.SIDECAR,
-        preview_service_url="http://preview:3001",
-    )
-    fetcher = _default_metadata_fetcher(sidecar)
-
-    assert isinstance(fetcher, LinkPreviewFetcher)
-    assert isinstance(_default_metadata_fetcher(Settings()), SecureMetadataFetcher)
 
 
 def test_api_closes_repository_during_shutdown(
@@ -861,28 +857,37 @@ def test_api_asset_reports_not_found_when_cached_file_disappears(
         assert client.get(thumbnail_url, headers=_HEADERS).status_code == 404
 
 
-def test_api_preview_returns_nulls_before_refresh(tmp_path: Path) -> None:
-    """Given a bookmark without cached metadata, preview returns empty fields."""
-    client = _client(tmp_path)
-    created = client.post(
-        f"{_API_PREFIX}/bookmarks",
-        headers=_HEADERS,
-        json={"url": "https://example.com", "title": "Example"},
+def test_api_preview_returns_nulls_when_on_demand_refresh_fails(
+    tmp_path: Path,
+) -> None:
+    """Given a failing fetch, the on-demand preview returns empty fields."""
+    settings = Settings(
+        database_path=tmp_path / "api.db",
+        metadata_cache_path=tmp_path / "metadata-cache",
+        metadata_refresh_enabled=True,
+        api_key=SecretStr(_API_KEY_VALUE),
     )
-    bookmark_id = created.json()["id"]
+    with TestClient(create_app(settings, FailingMetadataFetcher())) as client:
+        created = client.post(
+            f"{_API_PREFIX}/bookmarks",
+            headers=_HEADERS,
+            json={"url": "https://example.com", "title": "Example"},
+        )
+        bookmark_id = created.json()["id"]
 
-    response = client.get(
-        f"{_API_PREFIX}/bookmarks/{bookmark_id}/preview", headers=_HEADERS
-    )
+        response = client.get(
+            f"{_API_PREFIX}/bookmarks/{bookmark_id}/preview", headers=_HEADERS
+        )
 
-    assert response.status_code == 200
-    assert response.json() == {
-        "bookmark_id": bookmark_id,
-        "title": None,
-        "description": None,
-        "site_name": None,
-        "image_url": None,
-    }
+        assert response.status_code == 200
+        assert response.json() == {
+            "bookmark_id": bookmark_id,
+            "title": None,
+            "description": None,
+            "site_name": None,
+            "excerpt": None,
+            "image_url": None,
+        }
 
 
 def test_api_preview_returns_cached_unfurl_fields(tmp_path: Path) -> None:
@@ -913,6 +918,7 @@ def test_api_preview_returns_cached_unfurl_fields(tmp_path: Path) -> None:
         assert body["title"] == "Static Title"
         assert body["description"] == "Static description."
         assert body["site_name"] == "Static Site"
+        assert body["excerpt"] == "Static article excerpt."
         assert body["image_url"] == f"{_API_PREFIX}/bookmarks/{bookmark_id}/thumbnail"
 
 

@@ -194,6 +194,17 @@
             ],
             "title": "Description"
           },
+          "excerpt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Excerpt"
+          },
           "image_url": {
             "anyOf": [
               {

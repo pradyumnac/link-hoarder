@@ -228,6 +228,9 @@ def test_list_needing_metadata_finds_missing_and_stale_rows(
     stale = repository.create(
         BookmarkCreate(url="https://stale.example/", title="Stale")
     )
+    incomplete = repository.create(
+        BookmarkCreate(url="https://incomplete.example/", title="Incomplete")
+    )
     now = datetime.now(UTC)
     repository.save_metadata(
         BookmarkMetadataRecord(
@@ -236,6 +239,8 @@ def test_list_needing_metadata_finds_missing_and_stale_rows(
             status=MetadataStatus.READY,
             refreshed_at=now,
             retry_after=now + timedelta(days=7),
+            preview_title="Fresh Title",
+            preview_text="Fresh article excerpt.",
         )
     )
     repository.save_metadata(
@@ -247,12 +252,22 @@ def test_list_needing_metadata_finds_missing_and_stale_rows(
             retry_after=now - timedelta(hours=1),
         )
     )
+    repository.save_metadata(
+        BookmarkMetadataRecord(
+            bookmark_id=incomplete.id,
+            source_url=incomplete.url,
+            status=MetadataStatus.READY,
+            refreshed_at=now,
+            retry_after=now + timedelta(days=7),
+        )
+    )
 
     needing = repository.list_needing_metadata(limit=10)
 
     ids = {bookmark.id for bookmark in needing}
     assert missing.id in ids
     assert stale.id in ids
+    assert incomplete.id in ids
     assert fresh.id not in ids
 
 

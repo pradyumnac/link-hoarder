@@ -66,17 +66,13 @@ api-availability-favicon (no favicon filesystem check):
   a favicon filename, even when a favicon is cached.
 """
 
-import http.client
-import json
 import socket
 import threading
 import time
-import urllib.error
 from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime, timedelta
 from io import BytesIO
 from pathlib import Path
-from typing import Self
 from urllib.parse import SplitResult, urlsplit
 
 import pytest
@@ -88,7 +84,6 @@ from link_hoarder.core.backend import BookmarkStorageError
 from link_hoarder.core.metadata import (
     BookmarkMetadataService,
     FetchedMetadata,
-    LinkPreviewFetcher,
     MetadataBlockedError,
     MetadataFetchError,
     RemoteResponse,
@@ -117,7 +112,11 @@ class SuccessfulFetcher:
         """Return the configured image for both presentation assets."""
         del url
         self.calls += 1
-        return FetchedMetadata(favicon=self.image, thumbnail=self.image)
+        return FetchedMetadata(
+            favicon=self.image,
+            thumbnail=self.image,
+            article_text="Successful excerpt.",
+        )
 
 
 class FailedFetcher:
@@ -722,6 +721,12 @@ def test_queue_refresh_many_drops_work_past_the_cap(
 ) -> None:
     """Given a burst larger than the cap, the excess is dropped and logged, not queued."""
     monkeypatch.setattr(metadata_module, "_MAX_PENDING_REFRESHES", 2)
+    # Rebind the module logger so its processors list is the current one:
+    # an earlier test may have bound it to a replaced list, which would
+    # hide the captured warning below.
+    monkeypatch.setattr(
+        metadata_module, "_LOGGER", structlog.get_logger("link_hoarder.core.metadata")
+    )
     fetcher = BlockingFetcher()
     service = BookmarkMetadataService(
         repository,
@@ -1274,6 +1279,7 @@ class PreviewFetcher:
             title="Preview Title",
             description="Preview description.",
             site_name="Example",
+            article_text="Article excerpt text.",
         )
 
 
@@ -1298,113 +1304,177 @@ def test_metadata_service_stores_preview_text(
     assert cached.preview_title == "Preview Title"
     assert cached.preview_description == "Preview description."
     assert cached.preview_site == "Example"
+    assert cached.preview_text == "Article excerpt text."
     service.close()
 
 
-class _SidecarResponse:
-    """Minimal urlopen context manager returning canned bytes."""
+_ARTICLE_HTML = (
+    b"<html><head><title>Article Page</title></head><body>"
+    b"<nav>Home Sections Search Sign in</nav>"
+    b"<article><h1>Real Story</h1>"
+    b"<p>The readable article body carries the meaningful sentence here.</p>"
+    b"<p>A second paragraph keeps the extractor confident about the content.</p>"
+    b"</article></body></html>"
+)
 
-    def __init__(self, payload: bytes, status: int = 200) -> None:
-        self._payload = payload
-        self.status = status
-
-    def __enter__(self) -> Self:
-        return self
-
-    def __exit__(self, *args: object) -> None:
-        return None
-
-    def read(self) -> bytes:
-        """Return the canned response body."""
-        return self._payload
+_CLEAN_SVG = b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><circle cx="8" cy="8" r="8"/></svg>'
 
 
-def _sidecar_payload() -> bytes:
-    """Return a canned link-preview-js sidecar response body."""
-    return json.dumps(
-        {
-            "url": "https://example.com/article",
-            "title": "  Sidecar Title  ",
-            "description": "Sidecar description.",
-            "site_name": "Example",
-            "images": ["https://img.example/hero.png"],
-            "favicons": ["https://example.com/icon.png"],
-        }
-    ).encode("utf-8")
-
-
-def test_link_preview_fetcher_maps_sidecar_response(
+def test_secure_fetcher_extracts_article_text_without_navigation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Given a sidecar preview, the fetcher maps text and downloads images."""
-    seen: list[str] = []
+    """Given a full page, the fetcher stores the article without navigation text."""
+    fetcher = SecureMetadataFetcher()
 
-    def fake_image(
-        self: LinkPreviewFetcher, url: str, **kwargs: object
-    ) -> bytes | None:
-        seen.append(url)
-        return _png()
-
-    monkeypatch.setattr(
-        "urllib.request.urlopen",
-        lambda request, timeout=None: _SidecarResponse(_sidecar_payload()),
-    )
-    monkeypatch.setattr(LinkPreviewFetcher, "_fetch_image", fake_image)
-
-    fetched = LinkPreviewFetcher("http://127.0.0.1:3001").fetch(
-        "https://example.com/article"
-    )
-
-    assert fetched.title == "Sidecar Title"
-    assert fetched.description == "Sidecar description."
-    assert fetched.site_name == "Example"
-    assert fetched.thumbnail is not None
-    assert seen[0] == "https://img.example/hero.png"
-    assert "https://example.com/icon.png" in seen
-
-
-def test_link_preview_fetcher_rejects_sidecar_http_error(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Given a sidecar HTTP error, the fetcher raises a fetch error."""
-
-    def failing(request: object, timeout: object = None) -> _SidecarResponse:
-        raise urllib.error.HTTPError(
-            "http://127.0.0.1:3001/preview",
-            422,
-            "Unprocessable",
-            http.client.HTTPMessage(),
-            None,
+    def request(
+        url: str,
+        *,
+        max_bytes: int,
+        accept: str,
+        allow_truncation: bool = False,
+    ) -> RemoteResponse:
+        del url, max_bytes, accept, allow_truncation
+        return RemoteResponse(
+            body=_ARTICLE_HTML,
+            content_type="text/html; charset=utf-8",
+            final_url="https://example.com/article",
         )
 
-    monkeypatch.setattr("urllib.request.urlopen", failing)
+    monkeypatch.setattr(fetcher, "_request", request)
 
-    with pytest.raises(MetadataFetchError, match="HTTP 422"):
-        LinkPreviewFetcher("http://127.0.0.1:3001").fetch("https://example.com/x")
+    result = fetcher.fetch("https://example.com/article")
+
+    assert result.article_text is not None
+    assert "meaningful sentence" in result.article_text
+    assert "Sign in" not in result.article_text
 
 
-def test_link_preview_fetcher_rejects_unreachable_sidecar(
+def test_secure_fetcher_falls_back_to_inert_svg_favicon(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Given an unreachable sidecar, the fetcher raises a fetch error."""
+    """Given an SVG-only icon, the fetcher stores sanitized SVG markup."""
+    fetcher = SecureMetadataFetcher()
 
-    def failing(request: object, timeout: object = None) -> _SidecarResponse:
-        raise OSError("connection refused")
+    def request(
+        url: str,
+        *,
+        max_bytes: int,
+        accept: str,
+        allow_truncation: bool = False,
+    ) -> RemoteResponse:
+        del max_bytes, accept, allow_truncation
+        if url == "https://example.com/page":
+            return RemoteResponse(
+                body=(
+                    b'<head><link rel="icon" href="/icon.svg">'
+                    b"<title>SVG Page</title></head>"
+                ),
+                content_type="text/html; charset=utf-8",
+                final_url=url,
+            )
+        return RemoteResponse(
+            body=_CLEAN_SVG, content_type="image/svg+xml", final_url=url
+        )
 
-    monkeypatch.setattr("urllib.request.urlopen", failing)
+    monkeypatch.setattr(fetcher, "_request", request)
+    monkeypatch.setattr(fetcher, "_fetch_image", lambda url, **kwargs: None)
 
-    with pytest.raises(MetadataFetchError, match="could not be reached"):
-        LinkPreviewFetcher("http://127.0.0.1:3001").fetch("https://example.com/x")
+    result = fetcher.fetch("https://example.com/page")
+
+    assert result.favicon is None
+    assert result.favicon_svg == _CLEAN_SVG
 
 
-def test_link_preview_fetcher_rejects_invalid_sidecar_payload(
+def test_svg_sanitizer_rejects_active_content() -> None:
+    """Given scripted SVG markup, the sanitizer rejects the icon outright."""
+    from link_hoarder.core.metadata import _sanitize_svg_icon
+
+    assert (
+        _sanitize_svg_icon(
+            b'<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'
+        )
+        is None
+    )
+    assert (
+        _sanitize_svg_icon(
+            b'<svg xmlns="http://www.w3.org/2000/svg"'
+            b' onload="alert(1)"><circle cx="8" cy="8" r="8"/></svg>'
+        )
+        is None
+    )
+    assert _sanitize_svg_icon(_CLEAN_SVG) == _CLEAN_SVG
+
+
+def test_request_sends_browser_user_agent(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Given a malformed sidecar payload, the fetcher raises a fetch error."""
+    """Given a metadata request, the wire carries a browser user agent."""
+    import link_hoarder.core.metadata as metadata_module
+
+    sent = bytearray()
+
+    class RecordingSocket:
+        """Capture request bytes without opening a connection."""
+
+        def sendall(self, data: bytes) -> None:
+            """Record outbound request bytes."""
+            sent.extend(data)
+
+        def settimeout(self, timeout: float) -> None:
+            """Ignore timeouts on the fake connection."""
+            del timeout
+
+        def makefile(self, mode: str) -> BytesIO:
+            """Serve a canned minimal HTTP response."""
+            del mode
+            return BytesIO(
+                b"HTTP/1.1 200 OK\r\n"
+                b"Content-Type: text/html\r\n"
+                b"Content-Length: 4\r\n"
+                b"Connection: close\r\n\r\nbody"
+            )
+
+        def close(self) -> None:
+            """Accept teardown of the fake connection."""
+
+    def fake_destination(url: str) -> tuple[SplitResult, str, int]:
+        return urlsplit(url), "93.184.216.34", 80
+
     monkeypatch.setattr(
-        "urllib.request.urlopen",
-        lambda request, timeout=None: _SidecarResponse(b'{"images": "nope"}'),
+        socket,
+        "create_connection",
+        lambda *args, **kwargs: RecordingSocket(),
+    )
+    monkeypatch.setattr(metadata_module, "_validated_destination", fake_destination)
+
+    metadata_module._request_once(
+        urlsplit("http://example.com/page"),
+        "93.184.216.34",
+        80,
+        max_bytes=1024,
+        accept="text/html",
     )
 
-    with pytest.raises(MetadataFetchError, match="invalid payload"):
-        LinkPreviewFetcher("http://127.0.0.1:3001").fetch("https://example.com/x")
+    wire = sent.decode("ascii")
+    assert "User-Agent: Mozilla/5.0" in wire
+    assert "Link-Hoarder-Metadata" not in wire
+
+
+def test_initialize_migrates_preview_text_column(tmp_path: Path) -> None:
+    """Given a metadata table without the excerpt column, initialize adds it."""
+    import sqlite3
+
+    database = tmp_path / "legacy.db"
+    repository = BookmarkRepository(f"sqlite:///{database}")
+    repository.initialize()
+    repository.close()
+    with sqlite3.connect(database) as connection:
+        connection.execute("ALTER TABLE bookmark_metadata DROP COLUMN preview_text")
+
+    BookmarkRepository(f"sqlite:///{database}").initialize()
+
+    with sqlite3.connect(database) as connection:
+        columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(bookmark_metadata)")
+        }
+    assert "preview_text" in columns

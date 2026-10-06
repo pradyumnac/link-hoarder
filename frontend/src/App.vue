@@ -18,6 +18,7 @@ import { formatBookmarkDate, formatLocalDateTime } from "./format";
 const DEFAULT_ACCENT_COLOR = "#0d684d";
 const FETCH_SIZE = 1000;
 const PAGE_SIZE_OPTIONS = [10, 25, 50] as const;
+const EXCERPT_LENGTH_OPTIONS = [250, 500, 1000] as const;
 const RECENT_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 const SEARCH_DELAY_MS = 300;
 const SETTINGS_KEY = "link-hoarder.browser-settings";
@@ -33,11 +34,13 @@ const LIBRARY_DESTINATIONS = [
   { label: "Needs organization", value: "needs-organization" },
 ] as const satisfies ReadonlyArray<{ label: string; value: LibraryDestination }>;
 type PageSize = (typeof PAGE_SIZE_OPTIONS)[number];
+type ExcerptLength = (typeof EXCERPT_LENGTH_OPTIONS)[number];
 type ViewMode = "gallery" | "list";
 
 interface BrowserSettings {
   accentColor: string;
   defaultView: ViewMode;
+  excerptLength: ExcerptLength;
   pageSize: PageSize;
   sortOrder: BookmarkSort;
 }
@@ -61,6 +64,11 @@ function parseBrowserSettings(value: unknown): BrowserSettings | null {
   ) {
     return null;
   }
+  const excerptLength = EXCERPT_LENGTH_OPTIONS.some(
+    (option) => option === candidate.excerptLength,
+  )
+    ? (candidate.excerptLength as ExcerptLength)
+    : 500;
   const accentColor =
     typeof candidate.accentColor === "string" && /^#[0-9a-f]{6}$/i.test(candidate.accentColor)
       ? candidate.accentColor.toLowerCase()
@@ -68,6 +76,7 @@ function parseBrowserSettings(value: unknown): BrowserSettings | null {
   return {
     accentColor,
     defaultView: candidate.defaultView,
+    excerptLength,
     pageSize: candidate.pageSize as PageSize,
     sortOrder: candidate.sortOrder === "oldest" ? "oldest" : "newest",
   };
@@ -85,7 +94,7 @@ function loadBrowserSettings(): BrowserSettings {
   } catch {
     // Use defaults when browser-local storage is unavailable or malformed.
   }
-  return { accentColor: DEFAULT_ACCENT_COLOR, defaultView: "list", pageSize: 10, sortOrder: "newest" };
+  return { accentColor: DEFAULT_ACCENT_COLOR, defaultView: "list", excerptLength: 500, pageSize: 10, sortOrder: "newest" };
 }
 
 function applyAccentColor(accentColor: string): void {
@@ -442,6 +451,17 @@ function closePreview(): void {
   previewError.value = "";
 }
 
+const previewExcerpt = computed((): string | null => {
+  const text = previewDetail.value?.excerpt ?? previewDetail.value?.description ?? null;
+  if (text === null) {
+    return null;
+  }
+  if (text.length <= settings.excerptLength) {
+    return text;
+  }
+  return `${text.slice(0, settings.excerptLength).trimEnd()}…`;
+});
+
 function askDelete(bookmark: Bookmark): void {
   deleteTarget.value = bookmark;
 }
@@ -765,6 +785,11 @@ onBeforeUnmount(() => {
               <option value="gallery">Gallery</option>
             </select>
           </label>
+          <label>Preview excerpt length
+            <select v-model.number="settings.excerptLength" @change="updateSettings">
+              <option v-for="length in EXCERPT_LENGTH_OPTIONS" :key="length" :value="length">{{ length }} characters</option>
+            </select>
+          </label>
           <label>Accent color
             <span class="accent-picker">
               <input
@@ -870,7 +895,7 @@ onBeforeUnmount(() => {
             alt=""
             @error="hideThumbnail(previewTarget.id)"
           />
-          <p v-if="previewDetail?.description" class="preview-modal-description">{{ previewDetail.description }}</p>
+          <p v-if="previewExcerpt" class="preview-modal-excerpt">{{ previewExcerpt }}</p>
           <p v-else class="empty">No preview text is cached for this link yet.</p>
           <a
             v-if="!previewTarget.url.startsWith('javascript:')"

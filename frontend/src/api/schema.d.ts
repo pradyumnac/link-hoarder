@@ -237,6 +237,8 @@ export interface components {
             bookmark_id: number;
             /** Description */
             description?: string | null;
+            /** Excerpt */
+            excerpt?: string | null;
             /** Image Url */
             image_url?: string | null;
             /** Site Name */

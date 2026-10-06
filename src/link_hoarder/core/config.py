@@ -8,8 +8,6 @@ from platformdirs import user_config_path, user_data_path
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, SecretStr, ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from link_hoarder.core.models import PreviewProvider
-
 
 class BackendKind(StrEnum):
     """CLI bookmark backend."""
@@ -44,8 +42,6 @@ class Settings(BaseSettings):
     database_path: Path = default_database_path()
     metadata_cache_path: Path = default_metadata_cache_path()
     metadata_refresh_enabled: bool = True
-    preview_provider: PreviewProvider = PreviewProvider.BUILTIN
-    preview_service_url: str = "http://127.0.0.1:3001"
     api_key: SecretStr | None = Field(default=None, min_length=32)
     backend: BackendKind | None = None
     api_url: HttpUrl | None = None

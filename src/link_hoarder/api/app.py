@@ -31,9 +31,7 @@ from link_hoarder.core.logging import configure_logging
 from link_hoarder.core.metadata import (
     BookmarkAssetAvailability,
     BookmarkMetadataService,
-    LinkPreviewFetcher,
     MetadataFetcher,
-    SecureMetadataFetcher,
     generated_domain_icon,
 )
 from link_hoarder.core.models import (
@@ -48,7 +46,7 @@ from link_hoarder.core.models import (
     ImportWarning,
     ImportWarningCode,
     JsonImportResult,
-    PreviewProvider,
+    MetadataStatus,
 )
 from link_hoarder.core.repository import BookmarkRepository, DuplicateBookmarkError
 
@@ -72,13 +70,6 @@ class ErrorDetail(BaseModel):
     detail: str
 
 
-def _default_metadata_fetcher(current: Settings) -> MetadataFetcher:
-    """Select the metadata fetcher from the configured preview provider."""
-    if current.preview_provider is PreviewProvider.SIDECAR:
-        return LinkPreviewFetcher(current.preview_service_url)
-    return SecureMetadataFetcher()
-
-
 def create_app(
     settings: Settings | None = None,
     metadata_fetcher: MetadataFetcher | None = None,
@@ -90,11 +81,10 @@ def create_app(
         raise RuntimeError("LINK_HOARDER_API_KEY is required.")
     repository = BookmarkRepository(current.database_url)
     repository.initialize()
-    fetcher = metadata_fetcher or _default_metadata_fetcher(current)
     metadata = BookmarkMetadataService(
         repository,
         current.metadata_cache_path,
-        fetcher=fetcher,
+        fetcher=metadata_fetcher,
         enabled=current.metadata_refresh_enabled,
     )
     expected_key = current.api_key.get_secret_value()
@@ -218,7 +208,8 @@ def create_app(
         metadata.queue_refresh(bookmark)
         path = metadata.asset_path(bookmark_id, "favicon")
         if path is not None:
-            return _cached_file_response(request, path, media_type="image/png")
+            media_type = "image/svg+xml" if path.suffix == ".svg" else "image/png"
+            return _cached_file_response(request, path, media_type=media_type)
         return _cached_content_response(
             request,
             generated_domain_icon(bookmark.url),
@@ -244,8 +235,18 @@ def create_app(
         bookmark = repository.get(bookmark_id)
         if bookmark is None:
             raise _not_found(bookmark_id)
-        metadata.queue_refresh(bookmark)
         cached = repository.get_metadata(bookmark_id)
+        if cached is None or (
+            cached.preview_text is None and cached.status is MetadataStatus.READY
+        ):
+            # The popup fetches on demand when the background cache has
+            # no excerpt yet; the refresh stores the row for later opens.
+            # Failed rows stay on the async backoff path instead, so a
+            # doomed fetch never blocks the popup twice.
+            metadata.refresh(bookmark)
+            cached = repository.get_metadata(bookmark_id)
+        else:
+            metadata.queue_refresh(bookmark)
         image_url = None
         if (
             cached is not None
@@ -260,6 +261,7 @@ def create_app(
             title=cached.preview_title,
             description=cached.preview_description,
             site_name=cached.preview_site,
+            excerpt=cached.preview_text,
             image_url=image_url,
         )
 

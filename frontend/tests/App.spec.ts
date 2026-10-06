@@ -158,6 +158,7 @@ describe("App", () => {
     vi.mocked(api.getBookmarkPreview).mockResolvedValue({
       bookmark_id: 1,
       description: "Preview description.",
+      excerpt: "Article excerpt text.",
       image_url: null,
       site_name: "Example",
       title: "Preview Title",
@@ -172,12 +173,41 @@ describe("App", () => {
     expect(api.getBookmarkPreview).toHaveBeenCalledWith(1);
     const popup = wrapper.get(".preview-modal");
     expect(popup.get("#preview-heading").text()).toBe("Preview Title");
-    expect(popup.get(".preview-modal-description").text()).toBe(
-      "Preview description.",
+    expect(popup.get(".preview-modal-excerpt").text()).toBe(
+      "Article excerpt text.",
     );
     const link = popup.get(".bookmark-url");
     expect(link.attributes("href")).toBe("https://example.com/article");
     expect(link.attributes("target")).toBe("_blank");
+  });
+
+  /** Given a long article excerpt, the popup truncates it to the saved length. */
+  it("truncates the preview excerpt to the configured length", async () => {
+    const httpBookmark = { ...bookmark, url: "https://example.com/article" };
+    vi.mocked(api.listBookmarks).mockResolvedValue({
+      items: [httpBookmark],
+      limit: 10,
+      offset: 0,
+      total: 1,
+    });
+    vi.mocked(api.getBookmarkPreview).mockResolvedValue({
+      bookmark_id: 1,
+      description: "Preview description.",
+      excerpt: `${"x".repeat(600)} end`,
+      image_url: null,
+      site_name: "Example",
+      title: "Preview Title",
+    });
+    const wrapper = mount(App);
+    await flushPromises();
+    await flushPromises();
+
+    await wrapper.get(".preview-bookmark").trigger("click");
+    await flushPromises();
+
+    const text = wrapper.get(".preview-modal-excerpt").text();
+    expect(text.endsWith("…")).toBe(true);
+    expect(text.length).toBeLessThanOrEqual(501);
   });
 
   /** Given an open preview popup, the close button dismisses it. */
@@ -233,10 +263,12 @@ describe("App", () => {
 
     await settingsPanel.get("select").setValue("25");
     await settingsPanel.findAll("select")[1]!.setValue("gallery");
+    await settingsPanel.findAll("select")[2]!.setValue("1000");
 
     expect(JSON.parse(window.localStorage.getItem("link-hoarder.browser-settings") ?? "{}")).toEqual({
       accentColor: "#0d684d",
       defaultView: "gallery",
+      excerptLength: 1000,
       pageSize: 25,
       sortOrder: "newest",
     });
@@ -256,6 +288,7 @@ describe("App", () => {
     expect(JSON.parse(window.localStorage.getItem("link-hoarder.browser-settings") ?? "{}")).toEqual({
       accentColor: "#7c3aed",
       defaultView: "list",
+      excerptLength: 500,
       pageSize: 10,
       sortOrder: "newest",
     });

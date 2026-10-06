@@ -56,6 +56,7 @@ class BookmarkRepository:
                 ("preview_title", "VARCHAR(300)"),
                 ("preview_description", "VARCHAR(500)"),
                 ("preview_site", "VARCHAR(255)"),
+                ("preview_text", "VARCHAR(2000)"),
             ):
                 existing = connection.exec_driver_sql(
                     "PRAGMA table_info(bookmark_metadata)"
@@ -117,11 +118,12 @@ class BookmarkRepository:
                 result.close()
 
     def list_needing_metadata(self, *, limit: int) -> list[BookmarkRead]:
-        """List bookmarks with no metadata row, or an elapsed `retry_after`.
+        """List bookmarks with no metadata row, stale metadata, or no excerpt.
 
         The bookmarks table is left-joined to its metadata row on their
-        shared primary key, so one query finds both cases: an absent row
-        (`bookmark_id IS NULL`) and an elapsed `retry_after`. Both join
+        shared primary key, so one query finds all three cases: an absent
+        row (`bookmark_id IS NULL`), an elapsed `retry_after`, and a row
+        that predates article excerpts (`preview_text IS NULL`). Both join
         columns are primary keys, so the join needs no added index. Rows
         are ordered by id, so a bounded `limit` reads a stable prefix
         instead of the whole table.
@@ -140,6 +142,7 @@ class BookmarkRepository:
                 or_(
                     col(BookmarkMetadataRecord.bookmark_id).is_(None),
                     col(BookmarkMetadataRecord.retry_after) <= now,
+                    col(BookmarkMetadataRecord.preview_text).is_(None),
                 )
             )
             .order_by(col(BookmarkRecord.id))
